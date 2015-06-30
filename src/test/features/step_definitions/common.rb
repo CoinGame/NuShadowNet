@@ -42,7 +42,7 @@ Given(/^a network with nodes? (.+)(?: able to mint)?$/) do |node_names|
     node.wait_for_boot
   end
 
-  wait_for(10) do
+  wait_for(2.0) do
     @nodes.values.all? do |node|
       count = node.connection_count
       count == @nodes.size - 1
@@ -302,7 +302,7 @@ end
 
 When(/^node "(.*?)" finds blocks until custodian "(.*?)" is elected$/) do |arg1, arg2|
   node = @nodes[arg1]
-  wait_for do
+  wait_for(2.0) do
     done = false
     block = node.generate_stake
     time_travel(60)
@@ -334,7 +334,7 @@ end
 When(/^node "(.*?)" finds blocks until custodian "(.*?)" is elected in transaction "(.*?)"$/) do |arg1, arg2, arg3|
   node = @nodes[arg1]
   address = @addresses[arg2]
-  wait_for do
+  wait_for(2.0) do
     done = false
     block = node.generate_stake
     time_travel(60)
