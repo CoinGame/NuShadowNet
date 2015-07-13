@@ -116,8 +116,6 @@ extern CCriticalSection cs_setpwalletRegistered;
 extern std::set<CWallet*> setpwalletRegistered;
 extern std::map<uint256, CBlock*> mapOrphanBlocks;
 extern std::map<uint256, CBlock*> mapDuplicateStakeBlocks;
-extern std::map<CBitcoinAddress, CBlockIndex*> mapElectedCustodian;
-extern CCriticalSection cs_mapElectedCustodian;
 #ifdef TESTING
 extern uint256 hashSingleStakeBlock;
 extern int nBlocksToIgnore;
@@ -1199,6 +1197,7 @@ public:
     bool SignBlock(const CKeyStore& keystore);
     bool CheckBlockSignature() const;
     unsigned int GetStakeEntropyBit() const; // ppcoin: entropy bit for stake modifier if chosen by modifier
+    bool CheckCustodianGrants(const CBlockIndex* pindex) const;
 
 private:
     bool SetBestChainInner(CTxDB& txdb, CBlockIndex *pindexNew);
@@ -1254,6 +1253,9 @@ public:
     // nubit: elected custodians
     std::vector<CCustodianVote> vElectedCustodian;
 
+    // nubit: previous block with an elected custodian
+    CBlockIndex* pprevElected;
+
     // block header
     int nVersion;
     uint256 hashMerkleRoot;
@@ -1284,6 +1286,7 @@ public:
         vParkRateResult.clear();
         nCoinAgeDestroyed = 0;
         vElectedCustodian.clear();
+        pprevElected = NULL;
 
         nVersion       = 0;
         hashMerkleRoot = 0;
@@ -1323,6 +1326,7 @@ public:
         vParkRateResult.clear();
         nCoinAgeDestroyed = 0;
         vElectedCustodian.clear();
+        pprevElected = NULL;
 
         nVersion       = block.nVersion;
         hashMerkleRoot = block.hashMerkleRoot;
@@ -1488,6 +1492,14 @@ public:
             return it->second;
         else
             return -1;
+    }
+
+    void GetElectedCustodians(std::map<CBitcoinAddress, CBlockIndex*>& mapElectedCustodian) const;
+    std::map<CBitcoinAddress, CBlockIndex*> GetElectedCustodians() const
+    {
+        std::map<CBitcoinAddress, CBlockIndex*> mapElectedCustodian;
+        GetElectedCustodians(mapElectedCustodian);
+        return mapElectedCustodian;
     }
 
     std::string ToString() const
