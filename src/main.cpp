@@ -1889,6 +1889,9 @@ bool Reorganize(CTxDB& txdb, CBlockIndex* pindexNew)
         }
     }
 
+    // The new chain may have changed some stake modifiers
+    ClearStakeModifierCache();
+
     printf("REORGANIZE: done\n");
 
     return true;
