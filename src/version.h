@@ -49,7 +49,7 @@ static const unsigned int PROTOCOL_V5_TEST_SWITCH_TIME = 1414195200; // 2014-10-
 
 // V2.0
 static const int PROTOCOL_V2_0 = 2000000;
-static const unsigned int PROTOCOL_V2_0_VOTE_TIME      = 1438696800; // 2015-08-04 14:00:00 UTC
+static const unsigned int PROTOCOL_V2_0_VOTE_TIME      = 1440511200; // 2015-08-25 14:00:00 UTC
 static const unsigned int PROTOCOL_V2_0_TEST_VOTE_TIME = 1433858400; // 2015-06-09 14:00:00 UTC
 
 #ifdef TESTING
