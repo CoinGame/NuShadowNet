@@ -481,6 +481,25 @@ void CNode::copyStats(CNodeStats &stats)
 #undef X
 
 
+#ifdef TESTING
+void CNode::ConnectToAddress(CNetAddr addr, unsigned short port)
+{
+    CAddress addrConnect(CService(addr, port));
+    {
+        LOCK(cs_setBanned);
+        setBanned.erase(addr);
+    }
+    semOutbound->wait();
+    if (addrConnect.IsValid())
+        OpenNetworkConnection(addrConnect);
+    else
+    {
+        semOutbound->post();
+        throw runtime_error("Invalid address");
+    }
+}
+#endif
+
 
 
 

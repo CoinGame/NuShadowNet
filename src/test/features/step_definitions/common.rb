@@ -299,7 +299,7 @@ When(/^node "(.*?)" votes an amount of "(.*?)" for custodian "(.*?)"$/) do |arg1
   node = @nodes[arg1]
   vote = node.rpc("getvote")
   vote["custodians"] << {
-    "address" => @addresses[arg3],
+    "address" => @addresses.fetch(arg3, arg3),
     "amount" => parse_number(arg2),
   }
   result = node.rpc("setvote", vote)
@@ -760,4 +760,48 @@ When(/^node "(.*?)" resets (?:his|her) vote$/) do |arg1|
   node = @nodes[arg1]
   vote = {}
   node.rpc("setvote", vote)
+end
+
+When(/^node "(.*?)" disconnects from nodes? (.*?)$/) do |arg1, arg2|
+  node = @nodes[arg1]
+
+  arg2.scan(/"(.*?)"/).each do |other,|
+    other = @nodes[other]
+    node.rpc("disconnect", other.ip)
+  end
+end
+
+When(/^node "(.*?)" reconnects to node "(.*?)"$/) do |arg1, arg2|
+  node = @nodes[arg1]
+  other = @nodes[arg2]
+  node.rpc("connect", other.ip, 7895)
+  wait_for do
+    peers = node.rpc("getpeerinfo")
+    peers.any? do |data|
+      data["addr"] == "#{other.ip}:7895" and data["version"] != 0
+    end
+  end
+end
+
+Then(/^node "(.*?)" should receive block "(.*?)" but stay at block "(.*?)"$/) do |arg1, arg2, arg3|
+  node = @nodes[arg1]
+  received_block = @blocks[arg2]
+  current_block = @blocks[arg3]
+  wait_for do
+    expect { node.rpc("getblock", received_block) }.not_to raise_error
+    expect(node.top_hash).to eq(current_block)
+  end
+end
+
+Given(/^node "(.*?)" votes for grants? (.*?)$/) do |arg1, arg2|
+  node = @nodes[arg1]
+  @grants ||= {}
+  arg2.scan(/"(.*?)"/).each do |grant_name,|
+    grant = @grants[grant_name]
+    if grant.nil?
+      address = @addresses[grant_name] = node.unit_rpc('B', "getnewaddress")
+      grant = @grants[grant_name] = {address: address, amount: 1}
+    end
+    step %Q{node "#{arg1}" votes an amount of "#{grant[:amount]}" for custodian "#{grant_name}"}
+  end
 end

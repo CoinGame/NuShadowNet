@@ -4644,6 +4644,53 @@ Value manualunpark(const Array& params, bool fHelp)
     return wtx.GetHash().ToString();
 }
 
+Value disconnect(const Array& params, bool fHelp)
+{
+    if (fHelp || params.size() != 1)
+        throw runtime_error(
+            "disconnect <ip>\n"
+            );
+
+    const CNetAddr ip(params[0].get_str().c_str(), true);
+    CNode* node = FindNode(ip);
+    if (!node)
+        throw JSONRPCError(-3, "node not found");
+
+    node->Misbehaving(GetArg("-banscore", 100));
+
+    return Value::null;
+}
+
+// in net.cpp
+void ConnectToAddress(CNetAddr addr, unsigned short port);
+Value connect(const Array& params, bool fHelp)
+{
+    if (fHelp || params.size() != 2)
+        throw runtime_error(
+            "connect <ip> <port>\n"
+            );
+
+    const CNetAddr ip(params[0].get_str().c_str(), true);
+    const unsigned short port = params[1].get_int();
+
+    CNode::ConnectToAddress(ip, port);
+
+    return Value::null;
+}
+
+
+Value clearbanned(const Array& params, bool fHelp)
+{
+    if (fHelp || params.size() != 0)
+        throw runtime_error(
+            "clearbanned\n"
+            );
+
+    CNode::ClearBanned();
+
+    return Value::null;
+}
+
 
 #endif
 
@@ -4746,6 +4793,9 @@ static const CRPCCommand vRPCCommands[] =
     { "shutdown",               &shutdown,               true },
     { "timetravel",             &timetravel,             true },
     { "manualunpark",           &manualunpark,           true },
+    { "disconnect",             &disconnect,             true },
+    { "connect",                &connect,                true },
+    { "clearbanned",            &clearbanned,            true },
 #endif
 };
 
@@ -5577,6 +5627,7 @@ Array RPCConvertValues(const std::string &strMethod, const std::vector<std::stri
     if (strMethod == "burn"                    && n > 0) ConvertTo<double>(params[0]);
 #ifdef TESTING
     if (strMethod == "timetravel"              && n > 0) ConvertTo<boost::int64_t>(params[0]);
+    if (strMethod == "connect"                 && n > 1) ConvertTo<boost::int64_t>(params[1]);
 #endif
 
     if (strMethod == "signmessage"             && n == 1)

@@ -616,6 +616,10 @@ public:
     static bool IsBanned(CNetAddr ip);
     bool Misbehaving(int howmuch); // 1 == a little, 100 == a lot
     void copyStats(CNodeStats &stats);
+
+#ifdef TESTING
+    static void ConnectToAddress(CNetAddr addr, unsigned short port);
+#endif
 };
 
 

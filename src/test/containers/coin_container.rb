@@ -167,6 +167,7 @@ class CoinContainer
 
     @json = @container.json
     @name = @json["Name"]
+    @ip = @json["NetworkSettings"]["IPAddress"]
 
     retries = 0
     begin
@@ -192,7 +193,7 @@ class CoinContainer
     @port= ports["7895/tcp"].first["HostPort"].to_i
   end
 
-  attr_reader :rpc_port, :port, :container, :name
+  attr_reader :rpc_port, :port, :container, :name, :ip
 
   def json
     container.json
