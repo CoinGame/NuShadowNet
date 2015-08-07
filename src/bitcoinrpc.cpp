@@ -3356,6 +3356,7 @@ Value getelectedcustodians(const Array& params, bool fHelp)
             custodianObject.push_back(Pair("amount", ValueFromAmount(custodianVote.nAmount)));
             custodianObject.push_back(Pair("block", pindex->GetBlockHash().ToString()));
             custodianObject.push_back(Pair("time", DateTimeStrFormat(pindex->nTime)));
+            custodianObject.push_back(Pair("height", pindex->nHeight));
 
             result.push_back(custodianObject);
         }
