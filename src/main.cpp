@@ -1779,43 +1779,44 @@ void CBlockIndex::GetElectedCustodians(std::map<CBitcoinAddress, CBlockIndex*>& 
     }
 }
 
-bool CBlock::CheckCustodianGrants(const CBlockIndex* pindex) const
+bool CBlock::CheckCustodianGrants(const CBlockIndex* pindexPrev) const
 {
-    const CBlockIndex* pindexPrev = pindex->pprev;
     std::map<CBitcoinAddress, CBlockIndex*> mapElectedCustodian;
-    pindex->pprev->GetElectedCustodians(mapElectedCustodian);
+    pindexPrev->GetElectedCustodians(mapElectedCustodian);
+
+    vector<CTransaction> vExpectedCurrencyCoinBase;
+    if (IsProofOfStake())
     {
-        vector<CTransaction> vExpectedCurrencyCoinBase;
-        if (IsProofOfStake())
-        {
-            vector<CVote> vVote;
-            if (!ExtractVotes(*this, pindexPrev, CUSTODIAN_VOTES, vVote))
-                return error("CheckCustodianGrants() : unable to extract votes");
+        vector<CVote> vVote;
+        if (!ExtractVotes(*this, pindexPrev, CUSTODIAN_VOTES, vVote))
+            return error("CheckCustodianGrants() : unable to extract votes");
 
-            if (!GenerateCurrencyCoinBases(vVote, mapElectedCustodian, vExpectedCurrencyCoinBase))
-                return error("CheckCustodianGrants() : unable to generate currency coin bases");
-        }
-        vector<CTransaction> vActualCurrencyCoinBase;
-        BOOST_FOREACH(const CTransaction& tx, vtx)
-        {
-            if (tx.IsCustodianGrant())
-                vActualCurrencyCoinBase.push_back(tx);
-        }
-        if (vActualCurrencyCoinBase.size() != vExpectedCurrencyCoinBase.size())
-            return DoS(100, error("CheckCustodianGrants() : unexpected number of expansion transaction"));
-        for (int i = 0; i < vActualCurrencyCoinBase.size(); i++)
-        {
-            const CTransaction& actualTx = vActualCurrencyCoinBase[i];
+        if (!GenerateCurrencyCoinBases(vVote, mapElectedCustodian, vExpectedCurrencyCoinBase))
+            return error("CheckCustodianGrants() : unable to generate currency coin bases");
+    }
 
-            CTransaction& expectedTx = vExpectedCurrencyCoinBase[i];
-            expectedTx.nTime = actualTx.nTime;
+    vector<CTransaction> vActualCurrencyCoinBase;
+    BOOST_FOREACH(const CTransaction& tx, vtx)
+    {
+        if (tx.IsCustodianGrant())
+            vActualCurrencyCoinBase.push_back(tx);
+    }
 
-            if (actualTx != expectedTx)
-            {
-                printf("expected tx: %s\n", expectedTx.ToString().c_str());
-                printf("actual tx:   %s\n", actualTx.ToString().c_str());
-                return DoS(100, error("CheckCustodianGrants() : invalid expansion transaction found"));
-            }
+    if (vActualCurrencyCoinBase.size() != vExpectedCurrencyCoinBase.size())
+        return DoS(100, error("CheckCustodianGrants() : unexpected number of expansion transaction"));
+
+    for (int i = 0; i < vActualCurrencyCoinBase.size(); i++)
+    {
+        const CTransaction& actualTx = vActualCurrencyCoinBase[i];
+
+        CTransaction& expectedTx = vExpectedCurrencyCoinBase[i];
+        expectedTx.nTime = actualTx.nTime;
+
+        if (actualTx != expectedTx)
+        {
+            printf("expected tx: %s\n", expectedTx.ToString().c_str());
+            printf("actual tx:   %s\n", actualTx.ToString().c_str());
+            return DoS(100, error("CheckCustodianGrants() : invalid expansion transaction found"));
         }
     }
 
@@ -1950,9 +1951,6 @@ bool CBlock::SetBestChainInner(CTxDB& txdb, CBlockIndex *pindexNew)
 
 bool CBlock::SetBestChain(CTxDB& txdb, CBlockIndex* pindexNew)
 {
-    if (!CheckCustodianGrants(pindexNew))
-        return error("SetBestChain() : custodian grant check failed");
-
     uint256 hash = GetHash();
 
     if (!txdb.TxnBegin())
@@ -2431,6 +2429,9 @@ bool CBlock::AcceptBlock()
             return error("AcceptBlock(): Protocol version vote (%d) lower than the protocol v2.0 (%d)",
                     vote.nVersionVote, PROTOCOL_V2_0);
     }
+
+    if (!CheckCustodianGrants(pindexPrev))
+        return error("AcceptBlock() : custodian grant check failed");
 
     // Write block to history file
     if (!CheckDiskSpace(::GetSerializeSize(*this, SER_DISK, CLIENT_VERSION)))
