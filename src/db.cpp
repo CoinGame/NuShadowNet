@@ -735,6 +735,26 @@ bool CTxDB::LoadBlockIndex()
             else
                 pindex->pprevElected = pindex->pprev->pprevElected;
         }
+        // if we have indexed block not in the main chain, we update them too
+        BOOST_FOREACH(PAIRTYPE(const uint256, CBlockIndex*) pair, mapBlockIndex)
+        {
+            CBlockIndex* pindex = pair.second;
+            if (pindex->pnext) // in main chain, already done
+                continue;
+            for (CBlockIndex* pprev = pindex->pprev; pprev; pprev = pprev->pprev)
+            {
+                if (pprev->pprevElected)
+                {
+                    pindex->pprevElected = pprev->pprevElected;
+                    break;
+                }
+                if (pprev->vElectedCustodian.size())
+                {
+                    pindex->pprevElected = pprev;
+                    break;
+                }
+            }
+        }
     }
 
     // Verify blocks in the best chain
