@@ -481,6 +481,25 @@ void CNode::copyStats(CNodeStats &stats)
 #undef X
 
 
+#ifdef TESTING
+void CNode::ConnectToAddress(CNetAddr addr, unsigned short port)
+{
+    CAddress addrConnect(CService(addr, port));
+    {
+        LOCK(cs_setBanned);
+        setBanned.erase(addr);
+    }
+    semOutbound->wait();
+    if (addrConnect.IsValid())
+        OpenNetworkConnection(addrConnect);
+    else
+    {
+        semOutbound->post();
+        throw runtime_error("Invalid address");
+    }
+}
+#endif
+
 
 
 
@@ -1072,11 +1091,14 @@ unsigned int pnSeed[] =
 {
     0x4bc734c6,
     0x2ec734c6,
-    0x2bd0f2a2,
     0x92c8edc0,
     0x781381d4,
     0x7f60c780,
     0x5edfe2bc,
+    0x6be4ef68,
+    0x77680977,
+    0x294109b0,
+    0x4b7109b0,
 };
 
 void DumpAddresses()

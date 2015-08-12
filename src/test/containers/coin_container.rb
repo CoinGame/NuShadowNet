@@ -58,6 +58,7 @@ class CoinContainer
       keypool: 1,
       stakegen: false,
       unpark: false,
+      checkblocks: -1,
     }
 
     args = default_args.merge(options[:args] || {})
@@ -145,9 +146,9 @@ class CoinContainer
 
     start_options = {
       'PortBindings' => {
-        "15001/tcp" => ['127.0.0.1'],
-        "15002/tcp" => ['127.0.0.1'],
-        "7895/tcp" => ['127.0.0.1'],
+        "15001/tcp" => [{}],
+        "15002/tcp" => [{}],
+        "7895/tcp" => [{}],
       },
       'Links' => links.map { |link_name, alias_name| "#{link_name}:#{alias_name}" },
     }
@@ -166,6 +167,7 @@ class CoinContainer
 
     @json = @container.json
     @name = @json["Name"]
+    @ip = @json["NetworkSettings"]["IPAddress"]
 
     retries = 0
     begin
@@ -191,7 +193,7 @@ class CoinContainer
     @port= ports["7895/tcp"].first["HostPort"].to_i
   end
 
-  attr_reader :rpc_port, :port, :container, :name
+  attr_reader :rpc_port, :port, :container, :name, :ip
 
   def json
     container.json

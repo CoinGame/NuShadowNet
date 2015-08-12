@@ -404,6 +404,11 @@ Object voteToJSON(const CVote& vote)
     }
     result.push_back(Pair("motions", motionVotes));
 
+    Object feeVotes;
+    BOOST_FOREACH(const PAIRTYPE(unsigned char, uint32_t)& feeVote, vote.mapFeeVote)
+        feeVotes.push_back(Pair(string(1, feeVote.first), (double)feeVote.second / COIN));
+    result.push_back(Pair("fees", feeVotes));
+
     return result;
 }
 
@@ -749,7 +754,7 @@ Value getinfo(const Array& params, bool fHelp)
 
     Object obj;
     obj.push_back(Pair("version",       FormatFullVersion()));
-    obj.push_back(Pair("protocolversion",(int)PROTOCOL_VERSION));
+    obj.push_back(Pair("protocolversion",pindexBest->nProtocolVersion));
     obj.push_back(Pair("walletversion", pwalletMain->GetVersion()));
     obj.push_back(Pair("walletunit",    string(1, pwalletMain->Unit())));
     obj.push_back(Pair("balance",       ValueFromAmount(pwalletMain->GetBalance())));
@@ -767,12 +772,14 @@ Value getinfo(const Array& params, bool fHelp)
     obj.push_back(Pair("testnet",       fTestNet));
     obj.push_back(Pair("keypoololdest", (boost::int64_t)pwalletMain->GetOldestKeyPoolTime()));
     obj.push_back(Pair("keypoolsize",   pwalletMain->GetKeyPoolSize()));
-    obj.push_back(Pair("paytxfee",      ValueFromAmount(pwalletMain->GetMinTxFee())));
+    obj.push_back(Pair("paytxfee",      ValueFromAmount(pwalletMain->GetSafeMinTxFee(pindexBest))));
     if (pwalletMain->IsCrypted())
         obj.push_back(Pair("unlocked_until", (boost::int64_t)nWalletUnlockTime / 1000));
     obj.push_back(Pair("errors",        GetWarnings("statusbar")));
 #ifdef TESTING
-    obj.push_back(Pair("time",          DateTimeStrFormat(GetAdjustedTime())));
+    obj.push_back(Pair("time",          DateTimeStrFormat(GetTime())));
+    obj.push_back(Pair("timestamp",     (boost::int64_t)GetTime()));
+    obj.push_back(Pair("trust",         pindexBest->bnChainTrust.ToString()));
 #endif
     return obj;
 }
@@ -786,7 +793,7 @@ Value getparkrates(const Array& params, bool fHelp)
             "Returns an object containing the park rates in the block at height <height> (default: the last block).\n"
             "The default <currency> is the currency of the RPC server's wallet.");
 
-    CBlockIndex *pindex = pindexBest;
+    const CBlockIndex *pindex = pindexBest;
 
     if (params.size() > 0)
     {
@@ -805,11 +812,13 @@ Value getparkrates(const Array& params, bool fHelp)
     else
         cUnit = pwalletMain->Unit();
 
-    if (!ValidUnit(cUnit))
+    if (!IsValidUnit(cUnit))
         throw JSONRPCError(-12, "Error: Invalid currency");
 
     if (cUnit == 'S')
         throw JSONRPCError(-12, "Error: Park rates are not available on NuShares");
+
+    pindex = pindex->GetIndexWithEffectiveParkRates();
 
     BOOST_FOREACH(const CParkRateVote& parkRateVote, pindex->vParkRateResult)
     {
@@ -1168,7 +1177,7 @@ Value getreceivedbyaddress(const Array& params, bool fHelp)
     for (map<uint256, CWalletTx>::iterator it = pwalletMain->mapWallet.begin(); it != pwalletMain->mapWallet.end(); ++it)
     {
         const CWalletTx& wtx = (*it).second;
-        if (wtx.IsCoinBase() || wtx.IsCoinStake() || !wtx.IsFinal() || wtx.IsCurrencyCoinBase())
+        if (wtx.IsCoinBase() || wtx.IsCoinStake() || !wtx.IsFinal() || wtx.IsCustodianGrant())
             continue;
 
         BOOST_FOREACH(const CTxOut& txout, wtx.vout)
@@ -1214,7 +1223,7 @@ Value getreceivedbyaccount(const Array& params, bool fHelp)
     for (map<uint256, CWalletTx>::iterator it = pwalletMain->mapWallet.begin(); it != pwalletMain->mapWallet.end(); ++it)
     {
         const CWalletTx& wtx = (*it).second;
-        if (wtx.IsCoinBase() || wtx.IsCoinStake() || !wtx.IsFinal() || wtx.IsCurrencyCoinBase())
+        if (wtx.IsCoinBase() || wtx.IsCoinStake() || !wtx.IsFinal() || wtx.IsCustodianGrant())
             continue;
 
         BOOST_FOREACH(const CTxOut& txout, wtx.vout)
@@ -1477,7 +1486,7 @@ Value getpremium(const Array& params, bool fHelp)
     if (!ParkDurationRange(nDuration))
         throw JSONRPCError(-5, "Invalid duration");
 
-    int64 nPremium = pindexBest->GetPremium(nAmount, nDuration, pwalletMain->GetUnit());
+    int64 nPremium = pindexBest->GetNextPremium(nAmount, nDuration, pwalletMain->GetUnit());
 
     return FormatMoney(nPremium);
 }
@@ -1648,7 +1657,7 @@ Value ListReceived(const Array& params, bool fByAccounts)
     {
         const CWalletTx& wtx = (*it).second;
 
-        if (wtx.IsCoinBase() || wtx.IsCoinStake() || !wtx.IsFinal() || wtx.IsCurrencyCoinBase())
+        if (wtx.IsCoinBase() || wtx.IsCoinStake() || !wtx.IsFinal() || wtx.IsCustodianGrant())
             continue;
 
         int nDepth = wtx.GetDepthInMainChain();
@@ -2627,7 +2636,7 @@ Value getblocktemplate(const Array& params, bool fHelp)
 
             entry.push_back(Pair("hash", txHash.GetHex()));
 
-            if (tx.IsCurrencyCoinBase())
+            if (tx.IsCustodianGrant())
                 continue;
 
             MapPrevTx mapInputs;
@@ -3138,6 +3147,8 @@ Value setvote(const Array& params, bool fHelp)
 
     Object objVote = params[0].get_obj();
     CVote vote = ParseVote(objVote);
+    if (!vote.IsValid(pindexBest->nProtocolVersion))
+        throw runtime_error("The vote is invalid\n");
 
     pwalletMain->SetVote(vote);
 
@@ -3329,8 +3340,7 @@ Value getelectedcustodians(const Array& params, bool fHelp)
 
     Array result;
 
-    LOCK(cs_mapElectedCustodian);
-    BOOST_FOREACH(const PAIRTYPE(CBitcoinAddress, CBlockIndex*)& pair, mapElectedCustodian)
+    BOOST_FOREACH(const PAIRTYPE(CBitcoinAddress, CBlockIndex*)& pair, pindexBest->GetElectedCustodians())
     {
         const CBitcoinAddress address = pair.first;
         const CBlockIndex* pindex = pair.second;
@@ -3346,6 +3356,7 @@ Value getelectedcustodians(const Array& params, bool fHelp)
             custodianObject.push_back(Pair("amount", ValueFromAmount(custodianVote.nAmount)));
             custodianObject.push_back(Pair("block", pindex->GetBlockHash().ToString()));
             custodianObject.push_back(Pair("time", DateTimeStrFormat(pindex->nTime)));
+            custodianObject.push_back(Pair("height", pindex->nHeight));
 
             result.push_back(custodianObject);
         }
@@ -3493,7 +3504,7 @@ Value liquidityinfo(const Array& params, bool fHelp)
 
     unsigned char cUnit = params[0].get_str()[0];
 
-    if (!ValidUnit(cUnit) || cUnit == 'S')
+    if (!IsValidCurrency(cUnit))
         throw JSONRPCError(-3, "Invalid currency");
 
     CBitcoinAddress address(params[3].get_str());
@@ -3503,7 +3514,7 @@ Value liquidityinfo(const Array& params, bool fHelp)
 
     unsigned char cCustodianUnit = address.GetUnit();
 
-    if (!ValidUnit(cCustodianUnit) || cCustodianUnit == 'S')
+    if (!IsValidCurrency(cCustodianUnit))
         throw JSONRPCError(-3, "Invalid custodian unit");
 
     CWallet* wallet = GetWallet(cCustodianUnit);
@@ -3521,7 +3532,10 @@ Value liquidityinfo(const Array& params, bool fHelp)
     }
 
     CLiquidityInfo info;
-    info.nVersion = PROTOCOL_VERSION;
+    if (pindexBest->nProtocolVersion >= PROTOCOL_V2_0)
+        info.nVersion = PROTOCOL_V2_0;
+    else
+        info.nVersion = 50000;
     info.cUnit = cUnit;
     info.nTime = GetAdjustedTime();
     info.nBuyAmount = roundint64(params[1].get_real() * COIN);
@@ -3530,18 +3544,25 @@ Value liquidityinfo(const Array& params, bool fHelp)
     string sIdentifier;
     if (params.size() > 4)
         sIdentifier = params[4].get_str();
+    if (info.nVersion >= PROTOCOL_V2_0)
+        info.sIdentifier = sIdentifier;
 
-    LOCK(cs_mapLiquidity);
-    mapLiquidity[sIdentifier] = info;
-
-    BOOST_FOREACH(const PAIRTYPE(string, CLiquidityInfo)& otherInfoPair, mapLiquidity)
+    // Old process: liquidity identifiers were kept in memory and summed before the info was sent
+    // To remove when the network definitively switched to 2.0
+    if (info.nVersion < PROTOCOL_V2_0)
     {
-        const string& otherIdentifier = otherInfoPair.first;
-        if (otherIdentifier != sIdentifier)
+        LOCK(cs_mapLiquidity);
+        mapLiquidity[sIdentifier] = info;
+
+        BOOST_FOREACH(const PAIRTYPE(string, CLiquidityInfo)& otherInfoPair, mapLiquidity)
         {
-            const CLiquidityInfo& otherInfo = otherInfoPair.second;
-            info.nBuyAmount += otherInfo.nBuyAmount;
-            info.nSellAmount += otherInfo.nSellAmount;
+            const string& otherIdentifier = otherInfoPair.first;
+            if (otherIdentifier != sIdentifier)
+            {
+                const CLiquidityInfo& otherInfo = otherInfoPair.second;
+                info.nBuyAmount += otherInfo.nBuyAmount;
+                info.nSellAmount += otherInfo.nSellAmount;
+            }
         }
     }
 
@@ -3571,6 +3592,50 @@ Value liquidityinfo(const Array& params, bool fHelp)
     return "";
 }
 
+struct CLiquidity
+{
+    int64 nBuy;
+    int64 nSell;
+
+    CLiquidity() :
+        nBuy(0),
+        nSell(0)
+    {
+    }
+
+    CLiquidity(int64 nBuy, int64 nSell) :
+        nBuy(nBuy),
+        nSell(nSell)
+    {
+    }
+
+    CLiquidity(const CLiquidityInfo& info) :
+        nBuy(info.nBuyAmount),
+        nSell(info.nSellAmount)
+    {
+    }
+
+    CLiquidity operator+=(const CLiquidity& other)
+    {
+        nBuy += other.nBuy;
+        nSell += other.nSell;
+        return *this;
+    }
+
+    friend CLiquidity operator+(const CLiquidity& a, const CLiquidity& b)
+    {
+        return CLiquidity(a.nBuy + b.nBuy, a.nSell + b.nSell);
+    }
+
+    Object ToObject() const
+    {
+        Object object;
+        object.push_back(Pair("buy", ValueFromAmount(nBuy)));
+        object.push_back(Pair("sell", ValueFromAmount(nSell)));
+        return object;
+    }
+};
+
 Value getliquidityinfo(const Array& params, bool fHelp)
 {
     if (fHelp || params.size() != 1)
@@ -3584,35 +3649,97 @@ Value getliquidityinfo(const Array& params, bool fHelp)
 
     unsigned char cUnit = params[0].get_str()[0];
 
-    if (!ValidUnit(cUnit) || cUnit == 'S')
+    if (!IsValidCurrency(cUnit))
         throw JSONRPCError(-3, "Invalid currency");
 
     Object result;
-    int64 nBuyAmount = 0;
-    int64 nSellAmount = 0;
+    CLiquidity total;
+    map<string, CLiquidity> mapTier;
+    map<string, CLiquidity> mapCustodian;
     {
         LOCK(cs_mapLiquidityInfo);
 
-        BOOST_FOREACH(const PAIRTYPE(const CBitcoinAddress, CLiquidityInfo)& item, mapLiquidityInfo)
+        BOOST_FOREACH(const PAIRTYPE(const CLiquiditySource, CLiquidityInfo)& item, mapLiquidityInfo)
         {
             const CLiquidityInfo& info = item.second;
             if (info.cUnit == cUnit)
             {
-                Object custodianInfo;
-                custodianInfo.push_back(Pair("buy", ValueFromAmount(info.nBuyAmount)));
-                custodianInfo.push_back(Pair("sell", ValueFromAmount(info.nSellAmount)));
-                result.push_back(Pair(info.GetCustodianAddress().ToString(), custodianInfo));
+                CLiquidity liquidity(info);
+                total += liquidity;
 
-                nBuyAmount += info.nBuyAmount;
-                nSellAmount += info.nSellAmount;
+                mapCustodian[info.GetCustodianAddress().ToString()] += liquidity;
+
+                string tierString = info.GetTier();
+                if (tierString != "")
+                    mapTier[tierString] += liquidity;
+            }
+        }
+    }
+    result.push_back(Pair("total", total.ToObject()));
+
+    Object tierResult;
+    BOOST_FOREACH(const PAIRTYPE(string, CLiquidity)& item, mapTier)
+    {
+        const string& tier = item.first;
+        const CLiquidity& liquidity = item.second;
+        tierResult.push_back(Pair(tier, liquidity.ToObject()));
+    }
+    result.push_back(Pair("tier", tierResult));
+
+    Object custodianResult;
+    BOOST_FOREACH(const PAIRTYPE(string, CLiquidity)& item, mapCustodian)
+    {
+        const string& tier = item.first;
+        const CLiquidity& liquidity = item.second;
+        custodianResult.push_back(Pair(tier, liquidity.ToObject()));
+    }
+    result.push_back(Pair("custodian", custodianResult));
+
+
+    return result;
+}
+
+Value getliquiditydetails(const Array& params, bool fHelp)
+{
+    if (fHelp || params.size() != 1)
+        throw runtime_error(
+            "getliquiditydetails <currency>\n"
+            "currency is the single letter of the currency (currently only 'B')"
+            );
+
+    if (params[0].get_str().size() != 1)
+        throw JSONRPCError(-3, "Invalid currency");
+
+    unsigned char cUnit = params[0].get_str()[0];
+
+    if (!IsValidCurrency(cUnit))
+        throw JSONRPCError(-3, "Invalid currency");
+
+    map<CBitcoinAddress, Object> mapCustodianResult;
+    {
+        LOCK(cs_mapLiquidityInfo);
+
+        BOOST_FOREACH(const PAIRTYPE(const CLiquiditySource, CLiquidityInfo)& item, mapLiquidityInfo)
+        {
+            const CLiquidityInfo& info = item.second;
+            if (info.cUnit == cUnit)
+            {
+                CLiquidity liquidity(info);
+                Object liquidityObject = liquidity.ToObject();;
+
+                Object& custodianObject = mapCustodianResult[info.GetCustodianAddress()];
+                custodianObject.push_back(Pair(info.sIdentifier, liquidityObject));
             }
         }
     }
 
-    Object total;
-    total.push_back(Pair("buy", ValueFromAmount(nBuyAmount)));
-    total.push_back(Pair("sell", ValueFromAmount(nSellAmount)));
-    result.push_back(Pair("total", total));
+    Object result;
+    BOOST_FOREACH(const PAIRTYPE(const CBitcoinAddress, Object)& item, mapCustodianResult)
+    {
+        const CBitcoinAddress& address = item.first;
+        const Object& object = item.second;
+        result.push_back(Pair(address.ToString(), object));
+    }
 
     return result;
 }
@@ -4192,7 +4319,7 @@ Value setdatafeed(const Array& params, bool fHelp)
             "setdatafeed <url> [<signature url> <address>] [<parts>]\n"
             "Change the vote data feed. Set <url> to an empty string to disable.\n"
             "If <signature url> and <address> are specified and not empty strings a signature will also be retrieved at <signature url> and verified.\n"
-            "Parts is the list of the top level vote parts that will be taken from the feed, separated by a coma. The other parts will not affect the vote. Default is \"custodians,parkrates,motions\".");
+            "Parts is the list of the top level vote parts that will be taken from the feed, separated by a coma. The other parts will not affect the vote. Default is \"custodians,parkrates,motions,fees\".");
 
     string sURL = params[0].get_str();
 
@@ -4204,7 +4331,7 @@ Value setdatafeed(const Array& params, bool fHelp)
     if (params.size() > 2)
         sAddress = params[2].get_str();
 
-    string sParts("custodians,parkrates,motions");
+    string sParts("custodians,parkrates,motions,fees");
     if (params.size() > 3)
         sParts = params[3].get_str();
     vector<string> vParts;
@@ -4212,7 +4339,7 @@ Value setdatafeed(const Array& params, bool fHelp)
 
     BOOST_FOREACH(const string sPart, vParts)
     {
-        if (sPart != "custodians" && sPart != "parkrates" && sPart != "motions")
+        if (sPart != "custodians" && sPart != "parkrates" && sPart != "motions" && sPart != "fees")
             throw runtime_error("Invalid parts");
     }
 
@@ -4246,6 +4373,7 @@ Value getdatafeed(const Array& params, bool fHelp)
     result.push_back(Pair("url", dataFeed.sURL));
     result.push_back(Pair("signatureurl", dataFeed.sSignatureURL));
     result.push_back(Pair("signatureaddress", dataFeed.sSignatureAddress));
+    result.push_back(Pair("parts", boost::algorithm::join(dataFeed.vParts, ",")));
 
     return result;
 }
@@ -4266,7 +4394,7 @@ Value burn(const Array& params, bool fHelp)
     if (params[1].get_str().size() != 1)
         throw JSONRPCError(-101, "Invalid unit length");
     unsigned char cUnit = params[1].get_str()[0];
-    if (!ValidUnit(cUnit))
+    if (!IsValidUnit(cUnit))
         throw JSONRPCError(-101, "Invalid unit");
 
     CWallet* pwallet = GetWallet(cUnit);
@@ -4411,12 +4539,8 @@ Value duplicateblock(const Array& params, bool fHelp)
             throw JSONRPCError(-3, "unable to extract votes");
 
         vector<CTransaction> vCurrencyCoinBase;
-        {
-            LOCK(cs_mapElectedCustodian);
-
-            if (!GenerateCurrencyCoinBases(vVote, mapElectedCustodian, pindexPrev->nHeight + 1, vCurrencyCoinBase))
-                throw JSONRPCError(-3, "unable to generate currency coin bases");
-        }
+        if (!GenerateCurrencyCoinBases(vVote, pindexBest->GetElectedCustodians(), vCurrencyCoinBase))
+            throw JSONRPCError(-3, "unable to generate currency coin bases");
 
         BOOST_FOREACH(const CTransaction& tx, vCurrencyCoinBase)
             pblock->vtx.push_back(tx);
@@ -4474,12 +4598,24 @@ Value duplicateblock(const Array& params, bool fHelp)
 
 Value ignorenextblock(const Array& params, bool fHelp)
 {
-    if (fHelp || params.size() != 0)
+    if (fHelp || params.size() > 1)
         throw runtime_error(
-            "ignorenextblock"
+            "ignorenextblock [all|0]"
             );
 
-    nBlocksToIgnore++;
+    if (params.size() > 0)
+    {
+        if (params[0].get_str() == "all")
+            nBlocksToIgnore = -1;
+        else if (params[0].get_str() == "0")
+            nBlocksToIgnore = 0;
+        else
+            throw JSONRPCError(-3, "invalid parameter");
+    }
+    else
+    {
+        nBlocksToIgnore++;
+    }
 
     return "";
 }
@@ -4507,6 +4643,53 @@ Value manualunpark(const Array& params, bool fHelp)
     wtx.RelayWalletTransaction();
 
     return wtx.GetHash().ToString();
+}
+
+Value disconnect(const Array& params, bool fHelp)
+{
+    if (fHelp || params.size() != 1)
+        throw runtime_error(
+            "disconnect <ip>\n"
+            );
+
+    const CNetAddr ip(params[0].get_str().c_str(), true);
+    CNode* node = FindNode(ip);
+    if (!node)
+        throw JSONRPCError(-3, "node not found");
+
+    node->Misbehaving(GetArg("-banscore", 100));
+
+    return Value::null;
+}
+
+// in net.cpp
+void ConnectToAddress(CNetAddr addr, unsigned short port);
+Value connect(const Array& params, bool fHelp)
+{
+    if (fHelp || params.size() != 2)
+        throw runtime_error(
+            "connect <ip> <port>\n"
+            );
+
+    const CNetAddr ip(params[0].get_str().c_str(), true);
+    const unsigned short port = params[1].get_int();
+
+    CNode::ConnectToAddress(ip, port);
+
+    return Value::null;
+}
+
+
+Value clearbanned(const Array& params, bool fHelp)
+{
+    if (fHelp || params.size() != 0)
+        throw runtime_error(
+            "clearbanned\n"
+            );
+
+    CNode::ClearBanned();
+
+    return Value::null;
 }
 
 
@@ -4588,6 +4771,7 @@ static const CRPCCommand vRPCCommands[] =
     { "setvote",                &setvote,                true },
     { "liquidityinfo",          &liquidityinfo,          false},
     { "getliquidityinfo",       &getliquidityinfo,       false},
+    { "getliquiditydetails",    &getliquiditydetails,    false},
     { "getmotions",             &getmotions,             true },
     { "getcustodianvotes",      &getcustodianvotes,      true },
     { "getelectedcustodians",   &getelectedcustodians,   true },
@@ -4610,6 +4794,9 @@ static const CRPCCommand vRPCCommands[] =
     { "shutdown",               &shutdown,               true },
     { "timetravel",             &timetravel,             true },
     { "manualunpark",           &manualunpark,           true },
+    { "disconnect",             &disconnect,             true },
+    { "connect",                &connect,                true },
+    { "clearbanned",            &clearbanned,            true },
 #endif
 };
 
@@ -5441,6 +5628,7 @@ Array RPCConvertValues(const std::string &strMethod, const std::vector<std::stri
     if (strMethod == "burn"                    && n > 0) ConvertTo<double>(params[0]);
 #ifdef TESTING
     if (strMethod == "timetravel"              && n > 0) ConvertTo<boost::int64_t>(params[0]);
+    if (strMethod == "connect"                 && n > 1) ConvertTo<boost::int64_t>(params[1]);
 #endif
 
     if (strMethod == "signmessage"             && n == 1)

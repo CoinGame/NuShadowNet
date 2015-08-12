@@ -23,12 +23,11 @@
 using namespace std;
 using namespace boost;
 
-unsigned int nNuProtocolV05SwitchTime     = 1415368800; // 2014-11-07 14:00:00 UTC
-unsigned int nNuProtocolV05TestSwitchTime = 1414195200; // 2014-10-25 00:00:00 UTC
+
 
 bool IsNuProtocolV05(int64 nTimeBlock)
 {
-    return (nTimeBlock >= (fTestNet? nNuProtocolV05TestSwitchTime : nNuProtocolV05SwitchTime));
+    return (nTimeBlock >= (fTestNet? PROTOCOL_V5_TEST_SWITCH_TIME : PROTOCOL_V5_SWITCH_TIME));
 }
 
 CCriticalSection cs_setpwalletRegistered;
@@ -66,9 +65,6 @@ map<uint256, uint256> mapProofOfStake;
 
 map<uint256, CDataStream*> mapOrphanTransactions;
 map<uint256, map<uint256, CDataStream*> > mapOrphanTransactionsByPrev;
-
-map<CBitcoinAddress, CBlockIndex*> mapElectedCustodian;
-CCriticalSection cs_mapElectedCustodian;
 
 // Constant stuff for coinbase transactions we create:
 CScript COINBASE_FLAGS;
@@ -403,7 +399,7 @@ bool CTransaction::AreInputsSameUnit(const MapPrevTx& mapInputs) const
 //
 bool CTransaction::AreInputsStandard(const MapPrevTx& mapInputs) const
 {
-    if (IsCoinBase() || IsCurrencyCoinBase())
+    if (IsCoinBase() || IsCustodianGrant())
         return true; // Coinbases don't use vin normally
 
     for (unsigned int i = 0; i < vin.size(); i++)
@@ -592,7 +588,7 @@ int CMerkleTx::SetMerkleBranch(const CBlock* pblock)
 bool CTransaction::CheckTransaction() const
 {
     // Basic checks that don't depend on any context
-    if (!ValidUnit(cUnit))
+    if (!IsValidUnit(cUnit))
         return DoS(10, error("CTransaction::CheckTransaction() : invalid unit"));
     if (vin.empty())
         return DoS(10, error("CTransaction::CheckTransaction() : vin empty"));
@@ -611,7 +607,7 @@ bool CTransaction::CheckTransaction() const
     for (int i = 0; i < vout.size(); i++)
     {
         const CTxOut& txout = vout[i];
-        if (txout.IsEmpty() && (!IsCoinBase()) && (!IsCoinStake()) && (!IsCurrencyCoinBase()))
+        if (txout.IsEmpty() && (!IsCoinBase()) && (!IsCoinStake()) && (!IsCustodianGrant()))
             return DoS(100, error("CTransaction::CheckTransaction() : txout empty for user transaction"));
         // ppcoin: enforce minimum output amount
         if ((!txout.IsEmpty()) && txout.nValue < GetMinTxOutAmount())
@@ -645,7 +641,7 @@ bool CTransaction::CheckTransaction() const
         if (vin[0].scriptSig.size() < 2 || vin[0].scriptSig.size() > 100)
             return DoS(100, error("CTransaction::CheckTransaction() : coinbase script size"));
     }
-    else if (IsCurrencyCoinBase())
+    else if (IsCustodianGrant())
     {
         // nubit: no script allowed in currency coinbase
         if (vin[0].scriptSig.size() != 0)
@@ -676,13 +672,30 @@ bool CTransaction::CheckTransaction() const
     return true;
 }
 
-int64 CTransaction::GetMinFee(unsigned int nBytes) const
+int64 CTransaction::GetUnitMinFee(const CBlockIndex *pindex) const
 {
-    const int64 nBaseFee = GetUnitMinFee();
+    return pindex->GetMinFee(cUnit);
+}
 
-    if (nBytes == 0)
-        nBytes = ::GetSerializeSize(*this, SER_NETWORK, PROTOCOL_VERSION);
+int64 CTransaction::GetSafeUnitMinFee(const CBlockIndex *pindex) const
+{
+    return pindex->GetSafeMinFee(cUnit);
+}
 
+int64 CTransaction::GetMinFee(const CBlockIndex *pindex, unsigned int nBytes) const
+{
+    int64 nBaseFee = GetUnitMinFee(pindex);
+    return GetMinFee(nBaseFee, nBytes);
+}
+
+int64 CTransaction::GetSafeMinFee(const CBlockIndex *pindex, unsigned int nBytes) const
+{
+    int64 nBaseFee = GetSafeUnitMinFee(pindex);
+    return GetMinFee(nBaseFee, nBytes);
+}
+
+int64 CTransaction::GetMinFee(int64 nBaseFee, unsigned int nBytes) const
+{
     int64 nMinFee = (1 + (int64)nBytes / 1000) * nBaseFee;
 
     if (!MoneyRange(nMinFee))
@@ -723,7 +736,7 @@ bool CTxMemPool::accept(CTxDB& txdb, CTransaction &tx, bool fCheckInputs,
     if (tx.IsCoinStake())
         return tx.DoS(100, error("CTxMemPool::accept() : coinstake as individual tx"));
     // nubit: CurrencyCoinBase is also only valid in a block
-    if (tx.IsCurrencyCoinBase())
+    if (tx.IsCustodianGrant())
         return tx.DoS(100, error("CTxMemPool::accept() : currency coinbase as individual tx"));
 
     // To help v0.1.5 clients who would see it as a negative number
@@ -804,7 +817,7 @@ bool CTxMemPool::accept(CTxDB& txdb, CTransaction &tx, bool fCheckInputs,
         unsigned int nSize = ::GetSerializeSize(tx, SER_NETWORK, PROTOCOL_VERSION);
 
         // Don't accept it if it can't get into a block
-        const int64 txMinFee = tx.GetMinFee(nSize);
+        const int64 txMinFee = tx.GetMinFee(pindexBest, nSize);
         if (nFees < txMinFee)
         {
             // nubit: unpark transactions do not have fees. The validity of the unpark is checked during ConnectInputs
@@ -965,7 +978,7 @@ bool CWalletTx::AcceptWalletTransaction(CTxDB& txdb, bool fCheckInputs)
         // Add previous supporting transactions first
         BOOST_FOREACH(CMerkleTx& tx, vtxPrev)
         {
-            if (!(tx.IsCoinBase() || tx.IsCoinStake() || tx.IsCurrencyCoinBase()))
+            if (!(tx.IsCoinBase() || tx.IsCoinStake() || tx.IsCustodianGrant()))
             {
                 uint256 hash = tx.GetHash();
                 if (!mempool.exists(hash) && !txdb.ContainsTx(hash))
@@ -1236,7 +1249,7 @@ void CBlock::UpdateTime(const CBlockIndex* pindexPrev)
 bool CTransaction::DisconnectInputs(CTxDB& txdb)
 {
     // Relinquish previous transactions' spent pointers
-    if (!IsCoinBase() && !IsCurrencyCoinBase())
+    if (!IsCoinBase() && !IsCustodianGrant())
     {
         BOOST_FOREACH(const CTxIn& txin, vin)
         {
@@ -1278,7 +1291,7 @@ bool CTransaction::FetchInputs(CTxDB& txdb, const map<uint256, CTxIndex>& mapTes
     // be dropped).  If tx is definitely invalid, fInvalid will be set to true.
     fInvalid = false;
 
-    if (IsCoinBase() || IsCurrencyCoinBase())
+    if (IsCoinBase() || IsCustodianGrant())
         return true; // Coinbase transactions have no inputs to fetch.
 
     for (unsigned int i = 0; i < vin.size(); i++)
@@ -1359,7 +1372,7 @@ const CTxOut& CTransaction::GetOutputFor(const CTxIn& input, const MapPrevTx& in
 
 int64 CTransaction::GetValueIn(const MapPrevTx& inputs) const
 {
-    if (IsCoinBase() || IsCurrencyCoinBase())
+    if (IsCoinBase() || IsCustodianGrant())
         return 0;
 
     int64 nResult = 0;
@@ -1373,7 +1386,7 @@ int64 CTransaction::GetValueIn(const MapPrevTx& inputs) const
 
 unsigned int CTransaction::GetP2SHSigOpCount(const MapPrevTx& inputs) const
 {
-    if (IsCoinBase() || IsCurrencyCoinBase())
+    if (IsCoinBase() || IsCustodianGrant())
         return 0;
 
     unsigned int nSigOps = 0;
@@ -1394,7 +1407,7 @@ bool CTransaction::ConnectInputs(CTxDB& txdb, MapPrevTx inputs,
     // fBlock is true when this is called from AcceptBlock when a new best-block is added to the blockchain
     // fMiner is true when called from the internal bitcoin miner
     // ... both are false when called from CTransaction::AcceptToMemoryPool
-    if (!IsCoinBase() && !IsCurrencyCoinBase())
+    if (!IsCoinBase() && !IsCustodianGrant())
     {
         int64 nValueIn = 0;
         int64 nFees = 0;
@@ -1523,7 +1536,7 @@ bool CTransaction::ConnectInputs(CTxDB& txdb, MapPrevTx inputs,
         {
             // ppcoin: coin stake tx earns reward instead of paying fee
             int64 nStakeReward = GetValueOut() - nValueIn;
-            if (nStakeReward > GetProofOfStakeReward() - GetMinFee() + GetUnitMinFee())
+            if (nStakeReward > GetProofOfStakeReward() - GetMinFee(pindexBlock) + GetUnitMinFee(pindexBlock))
                 return DoS(100, error("ConnectInputs() : %s stake reward exceeded", GetHash().ToString().substr(0,10).c_str()));
         }
         else if (!fValidUnpark)
@@ -1536,8 +1549,8 @@ bool CTransaction::ConnectInputs(CTxDB& txdb, MapPrevTx inputs,
             if (nTxFee < 0)
                 return DoS(100, error("ConnectInputs() : %s nTxFee < 0", GetHash().ToString().substr(0,10).c_str()));
             // ppcoin: enforce transaction fees for every block
-            if (nTxFee < GetMinFee())
-                return fBlock? DoS(100, error("ConnectInputs() : %s not paying required fee=%s, paid=%s", GetHash().ToString().substr(0,10).c_str(), FormatMoney(GetMinFee()).c_str(), FormatMoney(nTxFee).c_str())) : false;
+            if (nTxFee < GetMinFee(pindexBlock))
+                return fBlock? DoS(100, error("ConnectInputs() : %s not paying required fee=%s, paid=%s", GetHash().ToString().substr(0,10).c_str(), FormatMoney(GetMinFee(pindexBlock)).c_str(), FormatMoney(nTxFee).c_str())) : false;
             nFees += nTxFee;
             if (!MoneyRange(nFees))
                 return DoS(100, error("ConnectInputs() : nFees out of range"));
@@ -1550,7 +1563,7 @@ bool CTransaction::ConnectInputs(CTxDB& txdb, MapPrevTx inputs,
 
 bool CTransaction::ClientConnectInputs()
 {
-    if (IsCoinBase() || IsCurrencyCoinBase())
+    if (IsCoinBase() || IsCustodianGrant())
         return false;
 
     // Take over previous transactions' spent pointers
@@ -1674,7 +1687,7 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex)
         nTxPos += ::GetSerializeSize(tx, SER_DISK, CLIENT_VERSION);
 
         MapPrevTx mapInputs;
-        if (tx.IsCoinBase() || tx.IsCurrencyCoinBase())
+        if (tx.IsCoinBase() || tx.IsCustodianGrant())
             mapValueOut[tx.cUnit] += tx.GetValueOut();
         else
         {
@@ -1756,6 +1769,60 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex)
     return true;
 }
 
+void CBlockIndex::GetElectedCustodians(std::map<CBitcoinAddress, CBlockIndex*>& mapElectedCustodian) const
+{
+    mapElectedCustodian.clear();
+    for (const CBlockIndex* pindex = this; pindex; pindex = pindex->pprevElected)
+    {
+        BOOST_FOREACH(const CCustodianVote& custodianVote, pindex->vElectedCustodian)
+            mapElectedCustodian[custodianVote.GetAddress()] = const_cast<CBlockIndex*>(pindex);
+    }
+}
+
+bool CBlock::CheckCustodianGrants(const CBlockIndex* pindexPrev) const
+{
+    std::map<CBitcoinAddress, CBlockIndex*> mapElectedCustodian;
+    pindexPrev->GetElectedCustodians(mapElectedCustodian);
+
+    vector<CTransaction> vExpectedCurrencyCoinBase;
+    if (IsProofOfStake())
+    {
+        vector<CVote> vVote;
+        if (!ExtractVotes(*this, pindexPrev, CUSTODIAN_VOTES, vVote))
+            return error("CheckCustodianGrants() : unable to extract votes");
+
+        if (!GenerateCurrencyCoinBases(vVote, mapElectedCustodian, vExpectedCurrencyCoinBase))
+            return error("CheckCustodianGrants() : unable to generate currency coin bases");
+    }
+
+    vector<CTransaction> vActualCurrencyCoinBase;
+    BOOST_FOREACH(const CTransaction& tx, vtx)
+    {
+        if (tx.IsCustodianGrant())
+            vActualCurrencyCoinBase.push_back(tx);
+    }
+
+    if (vActualCurrencyCoinBase.size() != vExpectedCurrencyCoinBase.size())
+        return DoS(100, error("CheckCustodianGrants() : unexpected number of expansion transaction"));
+
+    for (int i = 0; i < vActualCurrencyCoinBase.size(); i++)
+    {
+        const CTransaction& actualTx = vActualCurrencyCoinBase[i];
+
+        CTransaction& expectedTx = vExpectedCurrencyCoinBase[i];
+        expectedTx.nTime = actualTx.nTime;
+
+        if (actualTx != expectedTx)
+        {
+            printf("expected tx: %s\n", expectedTx.ToString().c_str());
+            printf("actual tx:   %s\n", actualTx.ToString().c_str());
+            return DoS(100, error("CheckCustodianGrants() : invalid expansion transaction found"));
+        }
+    }
+
+    return true;
+}
+
 bool Reorganize(CTxDB& txdb, CBlockIndex* pindexNew)
 {
     printf("REORGANIZE\n");
@@ -1800,7 +1867,7 @@ bool Reorganize(CTxDB& txdb, CBlockIndex* pindexNew)
 
         // Queue memory transactions to resurrect
         BOOST_FOREACH(const CTransaction& tx, block.vtx)
-            if (!(tx.IsCoinBase() || tx.IsCoinStake() || tx.IsCurrencyCoinBase()))
+            if (!(tx.IsCoinBase() || tx.IsCoinStake() || tx.IsCustodianGrant()))
                 vResurrect.push_back(tx);
     }
 
@@ -1848,28 +1915,8 @@ bool Reorganize(CTxDB& txdb, CBlockIndex* pindexNew)
     BOOST_FOREACH(CTransaction& tx, vDelete)
         mempool.remove(tx);
 
-    // nubit: update elected custodians
-    {
-        BOOST_FOREACH(CBlockIndex* pindex, vDisconnect)
-        {
-            BOOST_FOREACH(const CCustodianVote& custodianVote, pindex->vElectedCustodian)
-            {
-                const CBitcoinAddress& address(custodianVote.GetAddress());
-                LOCK2(cs_mapElectedCustodian, cs_mapLiquidityInfo);
-                mapElectedCustodian.erase(address);
-                mapLiquidityInfo.erase(address);
-            }
-        }
-        BOOST_FOREACH(CBlockIndex* pindex, vConnect)
-        {
-            BOOST_FOREACH(const CCustodianVote& custodianVote, pindex->vElectedCustodian)
-            {
-                const CBitcoinAddress& address(custodianVote.GetAddress());
-                LOCK(cs_mapElectedCustodian);
-                mapElectedCustodian[address] = pindex;
-            }
-        }
-    }
+    // The new chain may have changed some stake modifiers
+    ClearStakeModifierCache();
 
     printf("REORGANIZE: done\n");
 
@@ -1898,14 +1945,6 @@ bool CBlock::SetBestChainInner(CTxDB& txdb, CBlockIndex *pindexNew)
     // Delete redundant memory transactions
     BOOST_FOREACH(CTransaction& tx, vtx)
         mempool.remove(tx);
-
-    // nubit: update elected custodians
-    BOOST_FOREACH(const CCustodianVote& custodianVote, pindexNew->vElectedCustodian)
-    {
-        const CBitcoinAddress& address(custodianVote.GetAddress());
-        LOCK(cs_mapElectedCustodian);
-        mapElectedCustodian[address] = pindexNew;
-    }
 
     return true;
 }
@@ -2018,7 +2057,7 @@ bool CTransaction::GetCoinAge(CTxDB& txdb, int64& nCoinAge) const
     CBigNum bnCentSecond = 0;  // coin age in the unit of cent-seconds
     nCoinAge = 0;
 
-    if (IsCoinBase() || IsCurrencyCoinBase())
+    if (IsCoinBase() || IsCustodianGrant())
         return true;
 
     BOOST_FOREACH(const CTxIn& txin, vin)
@@ -2111,6 +2150,22 @@ bool CBlock::AddToBlockIndex(unsigned int nFile, unsigned int nBlockPos)
         pindexNew->nHeight = pindexNew->pprev->nHeight + 1;
     }
 
+    // nubit: calculate the effective protocol version
+    pindexNew->nProtocolVersion = GetProtocolForNextBlock(pindexNew->pprev);
+    if (fDebug && pindexNew->pprev != NULL && pindexNew->nProtocolVersion > pindexNew->pprev->nProtocolVersion)
+        printf("Protocol version update %d -> %d on height=%d\n",
+                pindexNew->pprev->nProtocolVersion, pindexNew->nProtocolVersion, pindexNew->nHeight);
+
+
+    // nubit: store previous block with an elected custodian
+    if (pindexNew->pprev)
+    {
+        if (pindexNew->pprev->vElectedCustodian.size())
+            pindexNew->pprevElected = pindexNew->pprev;
+        else
+            pindexNew->pprevElected = pindexNew->pprev->pprevElected;
+    }
+
     // ppcoin: compute chain trust score
     pindexNew->bnChainTrust = (pindexNew->pprev ? pindexNew->pprev->bnChainTrust : 0) + pindexNew->GetBlockTrust();
 
@@ -2139,21 +2194,24 @@ bool CBlock::AddToBlockIndex(unsigned int nFile, unsigned int nBlockPos)
     // nubit: save vote data
     if (pindexNew->IsProofOfStake())
     {
-        if (!ExtractVote(*this, pindexNew->vote))
+        if (!ExtractVote(*this, pindexNew->vote, pindexNew->nProtocolVersion))
             return error("AddToBlockIndex() : Unable to extract vote");
-        if (!pindexNew->vote.IsValid())
+        if (!pindexNew->vote.IsValid(pindexNew->nProtocolVersion))
             return error("AddToBlockIndex() : Invalid vote");
 
         if (!GetCoinStakeAge(pindexNew->nCoinAgeDestroyed))
             return error("AddToBlockIndex() : Unable to get coin age");
         pindexNew->vote.nCoinAgeDestroyed = pindexNew->nCoinAgeDestroyed;
 
+        if (!CalculateVotedFees(pindexNew))
+            return error("Unable to calculate voted fees");
+
         if (!ExtractParkRateResults(*this, pindexNew->vParkRateResult))
             return error("AddToBlockIndex() : Unable to extract park rate results");
 
         {
             std::vector<CParkRateVote> vExpectedParkRateResult;
-            if (!CalculateParkRateResults(pindexNew->vote, pindexNew->pprev, vExpectedParkRateResult))
+            if (!CalculateParkRateResults(pindexNew->vote, pindexNew->pprev, pindexNew->nProtocolVersion, vExpectedParkRateResult))
                 return error("AddToBlockIndex() : Unable to calculate park rate results");
             if (pindexNew->vParkRateResult != vExpectedParkRateResult)
                 return error("AddToBlockIndex() : Park rate results do not match");
@@ -2170,7 +2228,7 @@ bool CBlock::AddToBlockIndex(unsigned int nFile, unsigned int nBlockPos)
     // nubit: save elected custodians
     BOOST_FOREACH(const CTransaction& tx, vtx)
     {
-        if (tx.IsCurrencyCoinBase())
+        if (tx.IsCustodianGrant())
         {
             if (tx.vout.size() < 1)
                 return error("Not enough outputs in currency coinbase");
@@ -2306,16 +2364,6 @@ bool CBlock::CheckBlock() const
     if (hashMerkleRoot != BuildMerkleTree())
         return DoS(100, error("CheckBlock() : hashMerkleRoot mismatch"));
 
-    // nubit: Basic vote check
-    if (IsProofOfStake())
-    {
-        CVote vote;
-        if (!ExtractVote(*this, vote))
-            return error("CheckBlock() : Unable to extract vote");
-        if (!vote.IsValid())
-            return error("CheckBlock() : Invalid vote");
-    }
-
     // ppcoin: check block signature
     if (!CheckBlockSignature())
         return DoS(100, error("CheckBlock() : bad block signature"));
@@ -2336,6 +2384,7 @@ bool CBlock::AcceptBlock()
         return DoS(10, error("AcceptBlock() : prev block not found"));
     CBlockIndex* pindexPrev = (*mi).second;
     int nHeight = pindexPrev->nHeight+1;
+    int nProtocolVersion = GetProtocolForNextBlock(pindexPrev);
 
     // Peershares: check switch from proof of work to proof of stake
     if (nHeight <= PROOF_OF_WORK_BLOCKS)
@@ -2370,45 +2419,19 @@ bool CBlock::AcceptBlock()
     if (!Checkpoints::CheckSync(hash, pindexPrev))
         return error("AcceptBlock() : rejected by synchronized checkpoint");
 
-    // nubit: check the expansion transactions match the expected ones
+    // nubit: reject pre v2.0 protocol votes
+    if (IsProofOfStake())
     {
-        vector<CTransaction> vExpectedCurrencyCoinBase;
-        if (IsProofOfStake())
-        {
-            vector<CVote> vVote;
-            if (!ExtractVotes(*this, pindexPrev, CUSTODIAN_VOTES, vVote))
-                return error("AcceptBlock() : unable to extract votes");
-
-            {
-                LOCK(cs_mapElectedCustodian);
-
-                if (!GenerateCurrencyCoinBases(vVote, mapElectedCustodian, nHeight, vExpectedCurrencyCoinBase))
-                    return error("AcceptBlock() : unable to generate currency coin bases");
-            }
-        }
-        vector<CTransaction> vActualCurrencyCoinBase;
-        BOOST_FOREACH(const CTransaction& tx, vtx)
-        {
-            if (tx.IsCurrencyCoinBase())
-                vActualCurrencyCoinBase.push_back(tx);
-        }
-        if (vActualCurrencyCoinBase.size() != vExpectedCurrencyCoinBase.size())
-            return DoS(100, error("AcceptBlock() : unexpected number of expansion transaction"));
-        for (int i = 0; i < vActualCurrencyCoinBase.size(); i++)
-        {
-            const CTransaction& actualTx = vActualCurrencyCoinBase[i];
-
-            CTransaction& expectedTx = vExpectedCurrencyCoinBase[i];
-            expectedTx.nTime = actualTx.nTime;
-
-            if (actualTx != expectedTx)
-            {
-                printf("expected tx: %s\n", expectedTx.ToString().c_str());
-                printf("actual tx:   %s\n", actualTx.ToString().c_str());
-                return DoS(100, error("AcceptBlock() : invalid expansion transaction found"));
-            }
-        }
+        CVote vote;
+        if (!ExtractVote(*this, vote, nProtocolVersion))
+            return error("AcceptBlock() : unable to extract block vote");
+        if (nProtocolVersion >= PROTOCOL_V2_0 && vote.nVersionVote < PROTOCOL_V2_0)
+            return error("AcceptBlock(): Protocol version vote (%d) lower than the protocol v2.0 (%d)",
+                    vote.nVersionVote, PROTOCOL_V2_0);
     }
+
+    if (!CheckCustodianGrants(pindexPrev))
+        return error("AcceptBlock() : custodian grant check failed");
 
     // Write block to history file
     if (!CheckDiskSpace(::GetSerializeSize(*this, SER_DISK, CLIENT_VERSION)))
@@ -2458,9 +2481,10 @@ bool ProcessBlock(CNode* pfrom, CBlock* pblock)
 {
 #ifdef TESTING
     static set<uint256> setIgnoredBlockHashes;
-    if (nBlocksToIgnore)
+    if (nBlocksToIgnore != 0)
     {
-        nBlocksToIgnore--;
+        if (nBlocksToIgnore > 0)
+            nBlocksToIgnore--;
         setIgnoredBlockHashes.insert(pblock->GetHash());
         return error("ProcessBlock() : block ignored");
     }
@@ -3326,7 +3350,7 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv)
         // nu: Relay liquidity info
         {
             LOCK(cs_mapLiquidityInfo);
-            BOOST_FOREACH(PAIRTYPE(const CBitcoinAddress, CLiquidityInfo)& item, mapLiquidityInfo)
+            BOOST_FOREACH(PAIRTYPE(const CLiquiditySource, CLiquidityInfo)& item, mapLiquidityInfo)
                 item.second.RelayTo(pfrom);
         }
 
@@ -4288,14 +4312,11 @@ CBlock* CreateNewBlock(CReserveKey& reservekey, CWallet* pwallet, bool fProofOfS
         }
 
         vector<CTransaction> vCurrencyCoinBase;
-        {
-            LOCK(cs_mapElectedCustodian);
 
-            if (!GenerateCurrencyCoinBases(vVote, mapElectedCustodian, pindexPrev->nHeight + 1, vCurrencyCoinBase))
-            {
-                printf("CreateNewBlock(): unable to generate currency coin bases");
-                return NULL;
-            }
+        if (!GenerateCurrencyCoinBases(vVote, pindexBest->GetElectedCustodians(), vCurrencyCoinBase))
+        {
+            printf("CreateNewBlock(): unable to generate currency coin bases");
+            return NULL;
         }
 
         BOOST_FOREACH(CTransaction& tx, vCurrencyCoinBase)
@@ -4310,21 +4331,22 @@ CBlock* CreateNewBlock(CReserveKey& reservekey, CWallet* pwallet, bool fProofOfS
     std::vector<CParkRateVote> vParkRateResult;
     if (pblock->IsProofOfStake())
     {
+        int nProtocolVersion = GetProtocolForNextBlock(pindexPrev);
         CVote vote;
-        if (!ExtractVote(*pblock, vote))
+        if (!ExtractVote(*pblock, vote, nProtocolVersion))
         {
-            printf("CreateNewBlock(): unable to extract vote");
+            printf("CreateNewBlock(): unable to extract vote\n");
             return NULL;
         }
         if (!pblock->GetCoinStakeAge(vote.nCoinAgeDestroyed))
         {
-            printf("CreateNewBlock(): unable to get vote coin age");
+            printf("CreateNewBlock(): unable to get vote coin age\n");
             return NULL;
         }
 
-        if (!CalculateParkRateResults(vote, pindexPrev, vParkRateResult))
+        if (!CalculateParkRateResults(vote, pindexPrev, GetProtocolForNextBlock(pindexPrev), vParkRateResult))
         {
-            printf("CreateNewBlock(): unable to calculate park rate results");
+            printf("CreateNewBlock(): unable to calculate park rate results\n");
             return NULL;
         }
     }
@@ -4342,7 +4364,7 @@ CBlock* CreateNewBlock(CReserveKey& reservekey, CWallet* pwallet, bool fProofOfS
         for (map<uint256, CTransaction>::iterator mi = mempool.mapTx.begin(); mi != mempool.mapTx.end(); ++mi)
         {
             CTransaction& tx = (*mi).second;
-            if (tx.IsCoinBase() || tx.IsCoinStake() || tx.IsCurrencyCoinBase() || !tx.IsFinal())
+            if (tx.IsCoinBase() || tx.IsCoinStake() || tx.IsCustodianGrant() || !tx.IsFinal())
                 continue;
 
             if (pblock->IsProofOfStake() && !tx.CheckParkWithResult(vParkRateResult))
@@ -4424,7 +4446,13 @@ CBlock* CreateNewBlock(CReserveKey& reservekey, CWallet* pwallet, bool fProofOfS
                 continue;
 
             // ppcoin: simplify transaction fee - allow free = false
-            int64 nMinFee = tx.GetMinFee();
+            int64 nMinFee;
+            {
+                // nu: use a fake CBlockIndex to simulate the future block index to calculate the effective fee in the block
+                CBlockIndex dummyIndex;
+                dummyIndex.pprev = pindexPrev;
+                nMinFee = tx.GetMinFee(&dummyIndex);
+            }
 
             // Connecting shouldn't fail due to dependency on other memory pool transactions
             // because we're already processing them in order of dependency
@@ -4867,4 +4895,42 @@ void GenerateBitcoins(bool fGenerate, CWallet* pwallet)
             Sleep(10);
         }
     }
+}
+
+const CBlockIndex* CBlockIndex::GetIndexWithEffectiveParkRates(int nOffset) const
+{
+    if (nProtocolVersion >= PROTOCOL_V2_0)
+    {
+        const CBlockIndex* peffectiveIndex = this;
+        for (int i = 0; i < PARK_RATE_VOTE_DELAY - nOffset; i++)
+        {
+            peffectiveIndex = peffectiveIndex->pprev;
+            if (!peffectiveIndex)
+                return 0;
+        }
+        return peffectiveIndex;
+    }
+    else
+        return this;
+}
+
+int64 CBlockIndex::GetPremium(int64 nValue, int64 nDuration, unsigned char cUnit, int nOffset) const
+{
+    const CBlockIndex* peffectiveIndex = GetIndexWithEffectiveParkRates(nOffset);
+    if (!peffectiveIndex)
+        return 0;
+    return ::GetPremium(nValue, nDuration, cUnit, peffectiveIndex->vParkRateResult);
+}
+
+int64 CBlockIndex::GetSafeMinFee(unsigned char cUnit) const
+{
+    const CBlockIndex* pindex = GetEffectiveFeeIndex()->pnext;
+    int64 nMaxMinFee = 0;
+    for (int i = 0; i < SAFE_FEE_BLOCKS && pindex; i++, pindex = pindex->pnext)
+    {
+        int64 nBlockMinFee = pindex->GetVotedMinFee(cUnit);
+        if (nBlockMinFee > nMaxMinFee)
+            nMaxMinFee = nBlockMinFee;
+    }
+    return nMaxMinFee;
 }

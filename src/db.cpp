@@ -604,6 +604,8 @@ bool CTxDB::LoadBlockIndex()
             pindexNew->vParkRateResult        = diskindex.vParkRateResult;
             pindexNew->nCoinAgeDestroyed      = diskindex.nCoinAgeDestroyed;
             pindexNew->vElectedCustodian      = diskindex.vElectedCustodian;
+            pindexNew->nProtocolVersion       = diskindex.nProtocolVersion;
+            pindexNew->mapVotedFee            = diskindex.mapVotedFee;
             pindexNew->nVersion       = diskindex.nVersion;
             pindexNew->hashMerkleRoot = diskindex.hashMerkleRoot;
             pindexNew->nTime          = diskindex.nTime;
@@ -665,7 +667,7 @@ bool CTxDB::LoadBlockIndex()
 
             BOOST_FOREACH(CTransaction& tx, block.vtx)
             {
-                if (tx.IsCoinBase() || tx.IsCurrencyCoinBase())
+                if (tx.IsCoinBase() || tx.IsCustodianGrant())
                     mapValueOut[tx.cUnit] += tx.GetValueOut();
                 else
                 {
@@ -726,11 +728,32 @@ bool CTxDB::LoadBlockIndex()
 
     // nubit: rebuild list of elected custodians
     {
-        LOCK(cs_mapElectedCustodian);
-        for (CBlockIndex* pindex = pindexBest; pindex && pindex->pprev; pindex = pindex->pprev)
+        for (CBlockIndex* pindex = pindexGenesisBlock->pnext; pindex; pindex = pindex->pnext)
         {
-            BOOST_FOREACH(const CCustodianVote& custodianVote, pindex->vElectedCustodian)
-                mapElectedCustodian[custodianVote.GetAddress()] = pindex;
+            if (pindex->pprev->vElectedCustodian.size())
+                pindex->pprevElected = pindex->pprev;
+            else
+                pindex->pprevElected = pindex->pprev->pprevElected;
+        }
+        // if we have indexed block not in the main chain, we update them too
+        BOOST_FOREACH(PAIRTYPE(const uint256, CBlockIndex*) pair, mapBlockIndex)
+        {
+            CBlockIndex* pindex = pair.second;
+            if (pindex->pnext) // in main chain, already done
+                continue;
+            for (CBlockIndex* pprev = pindex->pprev; pprev; pprev = pprev->pprev)
+            {
+                if (pprev->pprevElected)
+                {
+                    pindex->pprevElected = pprev->pprevElected;
+                    break;
+                }
+                if (pprev->vElectedCustodian.size())
+                {
+                    pindex->pprevElected = pprev;
+                    break;
+                }
+            }
         }
     }
 

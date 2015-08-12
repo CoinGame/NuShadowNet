@@ -57,15 +57,27 @@ static const int64 PROOF_OF_WORK_BLOCKS = 400; // Block height of the last proof
 static const int64 PARK_RATE_VOTES = 5; // Number of blocks used in park rate median vote calculation
 static const int64 PARK_RATE_PREVIOUS_VOTES = 1; // Number of blocks used in the park rate increase limitation
 static const unsigned int CUSTODIAN_VOTES = 5;
+static const int PARK_RATE_VOTE_DELAY = 12;
 #else
 static const int64 PARK_RATE_VOTES = 2000; // Number of blocks used in park rate median vote calculation
 static const int64 PARK_RATE_PREVIOUS_VOTES = 1440; // Number of blocks used in the park rate increase limitation
 static const unsigned int CUSTODIAN_VOTES = 10000;
+static const int PARK_RATE_VOTE_DELAY = 60;
 #endif
 static const int64 MOTION_VOTES = 10000;
 static const int64 PROOF_OF_STAKE_REWARD = 40 * COIN; // Constant reward of Proof of Stake blocks
 static const int64 MIN_COINSTAKE_VALUE = 10000 * COIN; // Minimum value allowed as input in a CoinStake
 static const int64 MAX_COIN_AGE = 100000000000000; // To make sure coin days can be added about 10,000 times without overflow
+
+#ifdef TESTING
+static const int FEE_VOTE_DELAY_BLOCKS = 3;
+static const int FEE_VOTES = 5;
+static const int SAFE_FEE_BLOCKS = 2;
+#else
+static const int FEE_VOTE_DELAY_BLOCKS = 60; // Voted fees are effective this number of blocks after the actual vote result
+static const int FEE_VOTES = 2000;
+static const int SAFE_FEE_BLOCKS = 10; // When a new transaction is created, the highest min fee of the next SAFE_FEE_BLOCKS blocks will be used, to make sure this transaction can be included in any of these blocks
+#endif
 
 
 #ifdef USE_UPNP
@@ -83,11 +95,25 @@ extern CScript COINBASE_FLAGS;
 
 static const std::string sAvailableUnits("SB");
 
-inline bool ValidUnit(unsigned char cUnit)
+inline bool IsValidUnit(unsigned char cUnit)
 {
     return sAvailableUnits.find(cUnit) != std::string::npos;
 }
 
+inline bool IsValidCurrency(unsigned char cUnit)
+{
+    return (cUnit != 'S' && IsValidUnit(cUnit));
+}
+
+inline int64 GetDefaultFee(unsigned char cUnit)
+{
+    switch (cUnit)
+    {
+        case 'S': return COIN;
+        case 'B': return CENT;
+        default: return MAX_MONEY;
+    }
+}
 
 
 
@@ -116,8 +142,6 @@ extern CCriticalSection cs_setpwalletRegistered;
 extern std::set<CWallet*> setpwalletRegistered;
 extern std::map<uint256, CBlock*> mapOrphanBlocks;
 extern std::map<uint256, CBlock*> mapDuplicateStakeBlocks;
-extern std::map<CBitcoinAddress, CBlockIndex*> mapElectedCustodian;
-extern CCriticalSection cs_mapElectedCustodian;
 #ifdef TESTING
 extern uint256 hashSingleStakeBlock;
 extern int nBlocksToIgnore;
@@ -173,11 +197,6 @@ bool IsNuProtocolV05(int64 nTimeBlock);
 inline int GetMaturity(bool fProofOfStake)
 {
     return fProofOfStake ? nCoinstakeMaturity : nCoinbaseMaturity;
-}
-
-inline int64 MinTxFee(unsigned char cUnit)
-{
-    return cUnit == 'S' ? MIN_SHARE_TX_FEE : MIN_CURRENCY_TX_FEE;
 }
 
 inline int64 MinTxOutAmount(unsigned char cUnit)
@@ -597,9 +616,12 @@ public:
         return (cUnit == 'S' && vin.size() > 0 && (!vin[0].prevout.IsNull()) && vout.size() >= 2 && vout[0].IsEmpty());
     }
 
-    bool IsCurrencyCoinBase() const
+    bool IsCustodianGrant() const
     {
-        return (cUnit != 'S' && vin.size() == 1 && vin[0].prevout.IsNull() && vout.size() >= 1);
+        if (cUnit == 'S')
+            return (vin.size() == 1 && vin[0].prevout.hash == 0 && vin[0].prevout.n == -2 && vout.size() >= 1);
+        else
+            return (IsValidCurrency(cUnit) && vin.size() == 1 && vin[0].prevout.IsNull() && vout.size() >= 1);
     }
 
     bool IsParked(unsigned int nOut) const
@@ -679,17 +701,21 @@ public:
         return dPriority > COIN * 144 / 250;
     }
 
-    int64 GetUnitMinFee() const
-    {
-        return MinTxFee(cUnit);
-    }
+    // nubit: Returns the per-kilobyte fee at this block
+    int64 GetUnitMinFee(const CBlockIndex *pindex) const;
+    // nubit: Returns a per-kilobyte fee that is safe to use in the next few blocks
+    int64 GetSafeUnitMinFee(const CBlockIndex *pindex) const;
 
     int64 GetMinTxOutAmount() const
     {
         return MinTxOutAmount(cUnit);
     }
 
-    int64 GetMinFee(unsigned int nBytes=0) const;
+    int64 GetMinFee(int64 nBaseFee, unsigned int nBytes=0) const;
+    // nubit: Returns the minimum fee required for this transaction in this block
+    int64 GetMinFee(const CBlockIndex *pindex, unsigned int nBytes=0) const;
+    // nubit: Returns the minimum fee that's safe to use in the next few blocks after pindex
+    int64 GetSafeMinFee(const CBlockIndex *pindex, unsigned int nBytes=0) const;
 
     bool ReadFromDisk(CDiskTxPos pos, FILE** pfileRet=NULL)
     {
@@ -1199,6 +1225,7 @@ public:
     bool SignBlock(const CKeyStore& keystore);
     bool CheckBlockSignature() const;
     unsigned int GetStakeEntropyBit() const; // ppcoin: entropy bit for stake modifier if chosen by modifier
+    bool CheckCustodianGrants(const CBlockIndex* pindex) const;
 
 private:
     bool SetBestChainInner(CTxDB& txdb, CBlockIndex *pindexNew);
@@ -1254,6 +1281,15 @@ public:
     // nubit: elected custodians
     std::vector<CCustodianVote> vElectedCustodian;
 
+    // nubit: protocol version that applies to this block
+    int nProtocolVersion;
+
+    // nubit: the result of the fee vote
+    std::map<unsigned char, uint32_t> mapVotedFee;
+
+    // nubit: previous block with an elected custodian
+    CBlockIndex* pprevElected;
+
     // block header
     int nVersion;
     uint256 hashMerkleRoot;
@@ -1284,6 +1320,9 @@ public:
         vParkRateResult.clear();
         nCoinAgeDestroyed = 0;
         vElectedCustodian.clear();
+        nProtocolVersion = 0;
+        mapVotedFee.clear();
+        pprevElected = NULL;
 
         nVersion       = 0;
         hashMerkleRoot = 0;
@@ -1323,6 +1362,9 @@ public:
         vParkRateResult.clear();
         nCoinAgeDestroyed = 0;
         vElectedCustodian.clear();
+        nProtocolVersion = 0;
+        mapVotedFee.clear();
+        pprevElected = NULL;
 
         nVersion       = block.nVersion;
         hashMerkleRoot = block.hashMerkleRoot;
@@ -1467,9 +1509,11 @@ public:
             nFlags |= BLOCK_STAKE_MODIFIER;
     }
 
-    int64 GetPremium(int64 nValue, int64 nDuration, unsigned char cUnit)
+    const CBlockIndex* GetIndexWithEffectiveParkRates(int nOffset = 0) const;
+    int64 GetPremium(int64 nValue, int64 nDuration, unsigned char cUnit, int nOffset = 0) const;
+    int64 GetNextPremium(int64 nValue, int64 nDuration, unsigned char cUnit) const
     {
-        return ::GetPremium(nValue, nDuration, cUnit, vParkRateResult);
+        return GetPremium(nValue, nDuration, cUnit, 1);
     }
 
     int64 GetMoneySupply(unsigned char cUnit) const
@@ -1488,6 +1532,38 @@ public:
             return it->second;
         else
             return -1;
+    }
+
+    const CBlockIndex* GetEffectiveFeeIndex() const
+    {
+        const CBlockIndex* pindex = this;
+        for (int i = 0; i < FEE_VOTE_DELAY_BLOCKS && pindex->pprev; i++)
+            pindex = pindex->pprev;
+        return pindex;
+    }
+
+    int64 GetVotedMinFee(unsigned char cUnit) const
+    {
+        std::map<unsigned char, uint32_t>::const_iterator it = mapVotedFee.find(cUnit);
+        if (it != mapVotedFee.end())
+            return (int64)it->second;
+        else
+            return GetDefaultFee(cUnit);
+    }
+
+    int64 GetMinFee(unsigned char cUnit) const
+    {
+        return GetEffectiveFeeIndex()->GetVotedMinFee(cUnit);
+    }
+
+    int64 GetSafeMinFee(unsigned char cUnit) const;
+
+    void GetElectedCustodians(std::map<CBitcoinAddress, CBlockIndex*>& mapElectedCustodian) const;
+    std::map<CBitcoinAddress, CBlockIndex*> GetElectedCustodians() const
+    {
+        std::map<CBitcoinAddress, CBlockIndex*> mapElectedCustodian;
+        GetElectedCustodians(mapElectedCustodian);
+        return mapElectedCustodian;
     }
 
     std::string ToString() const
@@ -1537,6 +1613,11 @@ public:
         if (!(nType & SER_GETHASH))
             READWRITE(nVersion);
 
+        if (nVersion >= PROTOCOL_V2_0)
+            READWRITE(nProtocolVersion);
+        else if (fRead)
+            const_cast<CDiskBlockIndex*>(this)->nProtocolVersion = 0;
+
         READWRITE(hashNext);
         READWRITE(nFile);
         READWRITE(nBlockPos);
@@ -1569,6 +1650,10 @@ public:
             READWRITE(vParkRateResult);
             READWRITE(nCoinAgeDestroyed);
             READWRITE(vElectedCustodian);
+            if (nProtocolVersion >= PROTOCOL_V2_0)
+                READWRITE(mapVotedFee);
+            else if (fRead)
+                const_cast<CDiskBlockIndex*>(this)->mapVotedFee.clear();
         }
         else if (fRead)
         {
@@ -1579,6 +1664,7 @@ public:
             const_cast<CDiskBlockIndex*>(this)->vParkRateResult.clear();
             const_cast<CDiskBlockIndex*>(this)->nCoinAgeDestroyed = 0;
             const_cast<CDiskBlockIndex*>(this)->vElectedCustodian.clear();
+            const_cast<CDiskBlockIndex*>(this)->mapVotedFee.clear();
         }
 
         // block header
