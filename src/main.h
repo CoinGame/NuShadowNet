@@ -1616,7 +1616,7 @@ public:
         if (nVersion >= PROTOCOL_V2_0)
             READWRITE(nProtocolVersion);
         else if (fRead)
-            const_cast<CDiskBlockIndex*>(this)->nProtocolVersion = 0;
+            const_cast<CDiskBlockIndex*>(this)->nProtocolVersion = PROTOCOL_V2_0;
 
         READWRITE(hashNext);
         READWRITE(nFile);
@@ -1646,7 +1646,7 @@ public:
             READWRITE(prevoutStake);
             READWRITE(nStakeTime);
             READWRITE(hashProofOfStake);
-            READWRITE(vote);
+            nSerSize += SerReadWrite(s, vote, nType, nProtocolVersion, ser_action);
             READWRITE(vParkRateResult);
             READWRITE(nCoinAgeDestroyed);
             READWRITE(vElectedCustodian);
