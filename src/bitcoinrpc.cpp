@@ -784,6 +784,56 @@ Value getinfo(const Array& params, bool fHelp)
     return obj;
 }
 
+CBlockIndex *getOptionalBlockHeight(const Array& params, const int blockHeightIndex)
+{
+    CBlockIndex *pindex = pindexBest;
+    if (params.size() > 0)
+    {
+        int nHeight = params[0].get_int();
+
+        if (nHeight < 0 || nHeight > nBestHeight)
+            throw runtime_error("Invalid height\n");
+
+        for (int i = nBestHeight; i > nHeight; i--)
+            pindex = pindex->pprev;
+    }
+    return pindex;
+}
+
+
+Value getprotocolinfo(const Array& params, bool fHelp)
+{
+    if (fHelp || params.size() > 1)
+        throw runtime_error(
+            "getprotocolinfo [<block height>]\n"
+            "Returns an object containing the current active protocol and votes.");
+
+    Object obj;
+
+    CBlockIndex *pindex = getOptionalBlockHeight(params, 0);
+
+    obj.push_back(Pair("version",       pindex->nProtocolVersion));
+    obj.push_back(Pair("max_version",    PROTOCOL_VERSION));
+    obj.push_back(Pair("switch_percent", (double)PROTOCOL_SWITCH_REQUIRE_VOTES/PROTOCOL_SWITCH_COUNT_VOTES*100));
+
+    map<int, int> mapProtocolVotes;
+    for (int i = 0; i < PROTOCOL_SWITCH_COUNT_VOTES && pindex; i++, pindex = pindex->pprev)
+        mapProtocolVotes[pindex->vote.nVersionVote]++;
+
+    Object protocolVotesObject;
+    BOOST_FOREACH(const PAIRTYPE(int, int)& protocolVote, mapProtocolVotes)
+    {
+        string version = boost::lexical_cast<std::string>(protocolVote.first);
+        Object voteDetails;
+        voteDetails.push_back(Pair("votes", protocolVote.second));
+        voteDetails.push_back(Pair("percentage", (double)protocolVote.second/PROTOCOL_SWITCH_COUNT_VOTES*100));
+        protocolVotesObject.push_back(Pair(version, voteDetails));
+    }
+    obj.push_back(Pair("protocol_votes", protocolVotesObject));
+
+    return obj;
+}
+
 
 Value getparkrates(const Array& params, bool fHelp)
 {
@@ -4716,6 +4766,7 @@ static const CRPCCommand vRPCCommands[] =
     { "gethashespersec",        &gethashespersec,        true },
     { "getnetworkghps",         &getnetworkghps,         true },
     { "getinfo",                &getinfo,                true },
+    { "getprotocolinfo",        &getprotocolinfo,        true },
     { "getparkrates",           &getparkrates,           true },
     { "getmininginfo",          &getmininginfo,          true },
     { "getnewaddress",          &getnewaddress,          true },
@@ -5616,6 +5667,7 @@ Array RPCConvertValues(const std::string &strMethod, const std::vector<std::stri
             throw runtime_error("type mismatch");
         params[0] = v.get_obj();
     }
+    if (strMethod == "getprotocolinfo"         && n > 0) ConvertTo<boost::int64_t>(params[0]);
     if (strMethod == "liquidityinfo"           && n > 1) ConvertTo<double>(params[1]);
     if (strMethod == "liquidityinfo"           && n > 2) ConvertTo<double>(params[2]);
     if (strMethod == "getmotions"              && n > 0) ConvertTo<boost::int64_t>(params[0]);
