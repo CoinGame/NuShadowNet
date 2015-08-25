@@ -637,6 +637,34 @@ bool CTxDB::LoadBlockIndex()
     if (fRequestShutdown)
         return true;
 
+    // nu: a bug in a previous version serialized blocks with 0 as version
+    BOOST_FOREACH(const PAIRTYPE(uint256, CBlockIndex*)& item, mapBlockIndex)
+    {
+        CBlockIndex* pindex = item.second;
+        if (pindex->vote.nVersionVote == 0 && pindex->IsProofOfStake())
+        {
+            printf("Repairing vote on block %s\n", item.first.GetHex().c_str());
+            CBlock block;
+            if (!block.ReadFromDisk(pindex, true))
+                return error("unable to read block");
+
+            CVote vote;
+            if (!ExtractVote(block, vote, pindex->nProtocolVersion))
+                return error("unable to extract vote");
+
+            pindex->vote = vote;
+
+            CTxDB txdb;
+            if (!txdb.TxnBegin())
+                return false;
+
+            txdb.WriteBlockIndex(CDiskBlockIndex(pindex));
+
+            if (!txdb.TxnCommit())
+                return false;
+        }
+    }
+
     // Calculate bnChainTrust
     vector<pair<int, CBlockIndex*> > vSortedByHeight;
     vSortedByHeight.reserve(mapBlockIndex.size());
