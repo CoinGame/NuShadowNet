@@ -513,12 +513,6 @@ bool CVote::IsValid(int nProtocolVersion) const
         seenCustodianVotes.insert(custodianVote);
     }
 
-    BOOST_FOREACH(const PAIRTYPE(unsigned char, uint32_t)& pair, mapFeeVote)
-    {
-        if (!IsValidUnit(pair.first))
-            return false;
-    }
-
     return true;
 }
 
@@ -776,12 +770,10 @@ bool CalculateVotedFees(CBlockIndex* pindex)
             uint32_t vote;
             if (pvoteindex)
             {
-                const map<unsigned char, uint32_t>& mapFeeVote = pvoteindex->vote.mapFeeVote;
-                map<unsigned char, uint32_t>::const_iterator it = mapFeeVote.find(cUnit);
-                if (it == mapFeeVote.end())
-                    vote = GetDefaultFee(cUnit);
+                if (pvoteindex->vote.mapFeeVote.Has(cUnit))
+                    vote = pvoteindex->vote.mapFeeVote[cUnit];
                 else
-                    vote = it->second;
+                    vote = GetDefaultFee(cUnit);
             }
             else
                 vote = GetDefaultFee(cUnit);

@@ -7,6 +7,7 @@
 
 #include "serialize.h"
 #include "base58.h"
+#include "unitmap.h"
 
 class CBlock;
 class CBlockIndex;
@@ -232,7 +233,7 @@ public:
     std::vector<CCustodianVote> vCustodianVote;
     std::vector<CParkRateVote> vParkRateVote;
     std::vector<uint160> vMotion;
-    std::map<unsigned char, uint32_t> mapFeeVote;
+    CUnitMap<uint32_t> mapFeeVote;
 
     int64 nCoinAgeDestroyed;
 

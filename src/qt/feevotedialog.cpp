@@ -36,10 +36,9 @@ void FeeVoteDialog::setModel(WalletModel *model)
         QTableWidgetItem *unitItem = new QTableWidgetItem(BitcoinUnits::baseName(unit));
         ui->table->setItem(i, 0, unitItem);
 
-        map<unsigned char, uint32_t>::const_iterator it = vote.mapFeeVote.find(unit);
         QString feeString;
-        if (it != vote.mapFeeVote.end())
-            feeString = BitcoinUnits::format(model->getOptionsModel()->getDisplayUnit(), it->second);
+        if (vote.mapFeeVote.Has(unit))
+            feeString = BitcoinUnits::format(model->getOptionsModel()->getDisplayUnit(), vote.mapFeeVote[unit]);
 
         QTableWidgetItem *feeItem = new QTableWidgetItem(feeString);
         ui->table->setItem(i, 1, feeItem);
@@ -82,7 +81,7 @@ void FeeVoteDialog::accept()
     }
 
     CVote vote = model->getVote();
-    vote.mapFeeVote = mapFee;
+    vote.mapFeeVote.SetFromMap(mapFee);
     if (!vote.IsValid(model->getProtocolVersion()))
     {
         error(tr("The new vote is invalid"));

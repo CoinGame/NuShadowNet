@@ -725,7 +725,8 @@ bool CTxDB::LoadBlockIndex()
             BOOST_FOREACH(unsigned char cUnit, sAvailableUnits)
             {
                 pindex->mapMoneySupply[cUnit] = (pindex->pprev? pindex->pprev->mapMoneySupply[cUnit] : 0) + mapValueOut[cUnit] - mapValueIn[cUnit];
-                pindex->mapTotalParked[cUnit] = (pindex->pprev? pindex->pprev->mapTotalParked[cUnit] : 0) + mapParked[cUnit];
+                if (cUnit != 'S')
+                    pindex->mapTotalParked[cUnit] = (pindex->pprev? pindex->pprev->mapTotalParked[cUnit] : 0) + mapParked[cUnit];
             }
 
             if (!txdb.WriteBlockIndex(CDiskBlockIndex(pindex)))

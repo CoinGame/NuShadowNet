@@ -1734,7 +1734,8 @@ bool CBlock::ConnectBlock(CTxDB& txdb, CBlockIndex* pindex)
     {
         pindex->mapMoneySupply[cUnit] = (pindex->pprev? pindex->pprev->mapMoneySupply[cUnit] : 0) + mapValueOut[cUnit] - mapValueIn[cUnit];
         // nubit: track amount parked
-        pindex->mapTotalParked[cUnit] = (pindex->pprev? pindex->pprev->mapTotalParked[cUnit] : 0) + mapParked[cUnit];
+        if (cUnit != 'S')
+            pindex->mapTotalParked[cUnit] = (pindex->pprev? pindex->pprev->mapTotalParked[cUnit] : 0) + mapParked[cUnit];
     }
 
     if (!txdb.WriteBlockIndex(CDiskBlockIndex(pindex)))
