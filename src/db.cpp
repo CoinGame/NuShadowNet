@@ -652,6 +652,7 @@ bool CTxDB::LoadBlockIndex()
             if (!ExtractVote(block, vote, pindex->nProtocolVersion))
                 return error("unable to extract vote");
 
+            vote.nCoinAgeDestroyed = pindex->vote.nCoinAgeDestroyed;
             pindex->vote = vote;
 
             CTxDB txdb;
