@@ -295,10 +295,7 @@ public:
         READWRITE(nVersionVote);
         // Before v2.0 the nVersionVote was used to specify the serialization version
         if (nVersionVote < PROTOCOL_V2_0)
-        {
             nVersion = nVersionVote;
-            if (fRead) const_cast<CVote*>(this)->nVersionVote = 0;
-        }
 
         READWRITE(vCustodianVote);
         READWRITE(vParkRateVote);
