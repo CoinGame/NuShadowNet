@@ -318,7 +318,6 @@ int CWalletDB::LoadWallet(CWallet* pwallet)
             else if (strType == "vote") // old structure
             {
                 CVote vote;
-                ssValue.nVersion = PROTOCOL_V2_0;
                 ssValue >> vote;
                 pwallet->vote = CUserVote(vote);
                 pwallet->vote.Upgrade();
