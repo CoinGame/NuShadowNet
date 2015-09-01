@@ -1616,7 +1616,7 @@ public:
         if (nVersion >= PROTOCOL_V2_0)
             READWRITE(nProtocolVersion);
         else if (fRead)
-            const_cast<CDiskBlockIndex*>(this)->nProtocolVersion = PROTOCOL_V2_0;
+            const_cast<CDiskBlockIndex*>(this)->nProtocolVersion = PROTOCOL_V0_5;
 
         READWRITE(hashNext);
         READWRITE(nFile);
