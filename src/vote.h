@@ -234,7 +234,7 @@ public:
     std::vector<uint160> vMotion;
     std::map<unsigned char, uint32_t> mapFeeVote;
 
-    int64 nCoinAgeDestroyed;
+    uint64 nCoinAgeDestroyed;
 
     CVote() :
         nVersionVote(PROTOCOL_VERSION),
@@ -350,7 +350,7 @@ int64 GetPremium(int64 nValue, int64 nDuration, unsigned char cUnit, const std::
 bool GenerateCurrencyCoinBases(const std::vector<CVote> vVote, const std::map<CBitcoinAddress, CBlockIndex*>& mapAlreadyElected, std::vector<CTransaction>& vCurrencyCoinBaseRet);
 
 int GetProtocolForNextBlock(const CBlockIndex* pPrevIndex);
-bool IsProtocolActiveForNextBlock(const CBlockIndex* pPrevIndex, int nSwitchTime, int nProtocolVersion, int nRequired=PROTOCOL_SWITCH_REQUIRE_VOTES, int nToCheck=PROTOCOL_SWITCH_COUNT_VOTES);
+bool IsProtocolActiveForNextBlock(const CBlockIndex* pPrevIndex, unsigned int nSwitchTime, int nProtocolVersion, int nRequired=PROTOCOL_SWITCH_REQUIRE_VOTES, int nToCheck=PROTOCOL_SWITCH_COUNT_VOTES);
 
 bool CalculateVotedFees(CBlockIndex* pindex);
 

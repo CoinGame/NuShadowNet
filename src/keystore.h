@@ -7,6 +7,7 @@
 #define BITCOIN_KEYSTORE_H
 
 #include "crypter.h"
+#include "sync.h"
 #include <boost/signals2/signal.hpp>
 
 class CScript;
@@ -161,18 +162,7 @@ public:
         return result;
     }
 
-    bool Lock()
-    {
-        if (!SetCrypted())
-            return false;
-
-        {
-            LOCK(cs_KeyStore);
-            vMasterKey.clear();
-        }
-
-        return true;
-    }
+    bool Lock();
 
     virtual bool AddCryptedKey(const CPubKey &vchPubKey, const std::vector<unsigned char> &vchCryptedSecret);
     bool AddKey(const CKey& key);
@@ -203,6 +193,11 @@ public:
             mi++;
         }
     }
+
+    /* Wallet status (encrypted, locked) changed.
+     * Note: Called without locks held.
+     */
+    boost::signals2::signal<void (CCryptoKeyStore* wallet)> NotifyStatusChanged;
 };
 
 #endif

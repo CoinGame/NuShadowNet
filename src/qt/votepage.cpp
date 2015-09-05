@@ -147,7 +147,7 @@ void VotePage::fillParkRateTable()
     }
 
     table->setRowCount(parkRates.size());
-    for (int i = 0; i < parkRates.size(); i++)
+    for (size_t i = 0; i < parkRates.size(); i++)
     {
         const CParkRate& parkRate = parkRates[i];
 

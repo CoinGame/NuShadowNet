@@ -42,7 +42,7 @@ BOOST_AUTO_TEST_CASE(reload_vote_from_script_tests)
 #undef CHECK_VOTE_EQUAL
 #define CHECK_VOTE_EQUAL(value) BOOST_CHECK(voteResult.value == vote.value);
     CHECK_VOTE_EQUAL(vCustodianVote.size());
-    for (int i=0; i<vote.vCustodianVote.size(); i++)
+    for (size_t i=0; i<vote.vCustodianVote.size(); i++)
     {
         CHECK_VOTE_EQUAL(vCustodianVote[i].cUnit);
         CHECK_VOTE_EQUAL(vCustodianVote[i].hashAddress);
@@ -53,11 +53,11 @@ BOOST_AUTO_TEST_CASE(reload_vote_from_script_tests)
     BOOST_CHECK_EQUAL(custodianAddress2.ToString(), vote.vCustodianVote[1].GetAddress().ToString());
 
     CHECK_VOTE_EQUAL(vParkRateVote.size());
-    for (int i=0; i<vote.vParkRateVote.size(); i++)
+    for (size_t i=0; i<vote.vParkRateVote.size(); i++)
     {
         CHECK_VOTE_EQUAL(vParkRateVote[i].cUnit);
         CHECK_VOTE_EQUAL(vParkRateVote[i].vParkRate.size());
-        for (int j=0; j<vote.vParkRateVote[i].vParkRate.size(); j++)
+        for (size_t j=0; j<vote.vParkRateVote[i].vParkRate.size(); j++)
         {
             CHECK_VOTE_EQUAL(vParkRateVote[i].vParkRate[j].nCompactDuration);
             CHECK_VOTE_EQUAL(vParkRateVote[i].vParkRate[j].nRate);
@@ -88,7 +88,7 @@ BOOST_AUTO_TEST_CASE(reload_park_rates_from_script_tests)
 #define CHECK_PARK_RATE_EQUAL(value) BOOST_CHECK(parkRateVoteResult.value == parkRateVote.value);
     CHECK_PARK_RATE_EQUAL(cUnit);
     CHECK_PARK_RATE_EQUAL(vParkRate.size());
-    for (int i=0; i<parkRateVote.vParkRate.size(); i++)
+    for (size_t i=0; i<parkRateVote.vParkRate.size(); i++)
     {
         CHECK_PARK_RATE_EQUAL(vParkRate[i].nCompactDuration);
         CHECK_PARK_RATE_EQUAL(vParkRate[i].nRate);
@@ -530,7 +530,7 @@ void printVotes(vector<CVote> vVote)
 {
     BOOST_FOREACH(const CVote& vote, vVote)
         BOOST_FOREACH(const CCustodianVote& custodianVote, vote.vCustodianVote)
-            printf("addr=%d, amount=%d, weight=%d, unit=%c\n", custodianVote.hashAddress.Get64(), custodianVote.nAmount, vote.nCoinAgeDestroyed, custodianVote.cUnit);
+            printf("addr=%"PRI64u", amount=%"PRI64d", weight=%"PRI64d", unit=%c\n", custodianVote.hashAddress.Get64(), custodianVote.nAmount, vote.nCoinAgeDestroyed, custodianVote.cUnit);
     printf("\n");
 }
 
@@ -659,7 +659,7 @@ BOOST_AUTO_TEST_CASE(create_currency_coin_bases)
     vVote[2].vCustodianVote.back().cUnit = 'B';
 
     // Should NSR and NBT
-    BOOST_CHECK(GenerateCurrencyCoinBases(vVote, mapAlreadyElected, 0, vCurrencyCoinBase));
+    BOOST_CHECK(GenerateCurrencyCoinBases(vVote, mapAlreadyElected, vCurrencyCoinBase));
     BOOST_CHECK_EQUAL(2, vCurrencyCoinBase.size());
     tx = vCurrencyCoinBase[0];
     BOOST_CHECK(tx.IsCustodianGrant());
@@ -836,7 +836,7 @@ BOOST_AUTO_TEST_CASE(vote_before_multi_motion_unserialization)
 
 BOOST_AUTO_TEST_CASE(protocol_voting)
 {
-    int PROTOCOL_SWITCH_TIME = 100;
+    unsigned int PROTOCOL_SWITCH_TIME = 100;
     int PROTOCOL_VOTES_REQ = 70;
     int PROTOCOL_VOTES_TOTAL = 80;
     int PROTOCOL_VERSION = PROTOCOL_V2_0;

@@ -29,7 +29,7 @@ void FeeVoteDialog::setModel(WalletModel *model)
 
     ui->table->setRowCount(0);
     ui->table->setRowCount(sAvailableUnits.size());
-    for (int i = 0; i < sAvailableUnits.size(); i++)
+    for (size_t i = 0; i < sAvailableUnits.size(); i++)
     {
         unsigned char unit = sAvailableUnits[i];
 
@@ -60,7 +60,7 @@ void FeeVoteDialog::accept()
     QTableWidget *table = ui->table;
     map<unsigned char, uint32_t> mapFee;
 
-    for (int i = 0; i < sAvailableUnits.size(); i++)
+    for (size_t i = 0; i < sAvailableUnits.size(); i++)
     {
         QTableWidgetItem *feeItem = table->item(i, 1);
         if (!feeItem)

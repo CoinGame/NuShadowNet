@@ -17,6 +17,7 @@ puts "Starting seed"
 seed = CoinContainer.new(
   image: 'nubit/seed',
   bind_code: false,
+  gdb: false,
   args: {
     timetravel: start_time_shift,
   },
@@ -29,7 +30,7 @@ nodes = []
 node_names.each do |name|
   node = CoinContainer.new(
     image: 'nubit/node',
-    bind_code: false,
+    bind_code: true,
     links: [seed] + nodes,
     args: {
       timetravel: start_time_shift,
@@ -45,6 +46,7 @@ OLD_VERSIONS.each do |version|
   node = CoinContainer.new(
     image: "nubit/#{version}",
     bind_code: false,
+    gdb: false,
     links: [seed] + nodes + old_nodes,
     args: {
       timetravel: start_time_shift,
@@ -57,7 +59,7 @@ end
 puts "Starting empty node"
 empty_node = CoinContainer.new(
   image: 'nubit/node',
-  bind_code: false,
+  bind_code: true,
   links: [seed.name],
   delete_at_exit: true,
   remove_wallet_after_shutdown: true,
@@ -68,7 +70,8 @@ empty_node = CoinContainer.new(
 
 all = [seed] + nodes + old_nodes + [empty_node]
 
-amount = 10e6
+amount = 1_000_000
+count = 10
 amount_string = amount.to_s.reverse.gsub(/(\d{3})(?=\d)/, '\\1,').reverse
 
 recipient_nodes = (nodes + old_nodes)
@@ -78,8 +81,10 @@ recipient_nodes.each_with_index do |node, i|
 
   address = node.rpc("getaccountaddress", "")
 
-  puts "Sending #{amount_string} to node #{node_names[i]}"
-  seed.rpc("sendtoaddress", address, amount)
+  count.times do
+    puts "Sending #{amount_string} to node #{node_names[i]}"
+    seed.rpc("sendtoaddress", address, amount)
+  end
 end
 
 puts "Waiting for confirmations"
@@ -88,7 +93,7 @@ loop do
   seed.generate_stake
   balances = recipient_nodes.map { |n| n.rpc("getbalance") }
   puts "Balances: #{balances.inspect}"
-  if balances.all? { |b| b == amount }
+  if balances.all? { |b| b == count * amount }
     break
   end
 end

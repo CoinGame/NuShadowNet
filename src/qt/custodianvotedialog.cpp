@@ -29,7 +29,7 @@ void CustodianVoteDialog::setModel(WalletModel *model)
 
     ui->table->setRowCount(0);
     ui->table->setRowCount(vote.vCustodianVote.size());
-    for (int i = 0; i < vote.vCustodianVote.size(); i++)
+    for (size_t i = 0; i < vote.vCustodianVote.size(); i++)
     {
         const CCustodianVote& custodianVote = vote.vCustodianVote[i];
 

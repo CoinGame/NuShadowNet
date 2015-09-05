@@ -103,7 +103,7 @@ bool CLiquidityInfo::ProcessLiquidityInfo()
 
     RemoveExtraLiquidityInfo(address);
 
-    MainFrameRepaint();
+    uiInterface.NotifyLiquidityChanged();
     return true;
 }
 
@@ -151,5 +151,5 @@ void RemoveExpiredLiquidityInfo(int nCurrentHeight)
     }
 
     if (fAnyRemoved)
-        MainFrameRepaint();
+        uiInterface.NotifyLiquidityChanged();
 }

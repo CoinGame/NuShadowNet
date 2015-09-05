@@ -38,7 +38,7 @@ private:
         {
             size_t realsize = size * nmemb;
 
-            int nMaxSize = GetArg("maxdatafeedsize", 10 * 1024);
+            unsigned int nMaxSize = GetArg("maxdatafeedsize", 10 * 1024);
             if (result.size() + realsize > nMaxSize)
                 throw runtime_error((boost::format("Data feed size exceeds limit (%1% bytes)") % nMaxSize).str());
 
@@ -73,8 +73,10 @@ public:
 
         curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0);
 
-        if (fUseProxy)
+        proxyType proxy;
+        if (GetProxy(NET_IPV4, proxy))
         {
+            const CService& addrProxy = proxy.first;
             curl_easy_setopt(curl, CURLOPT_PROXY, addrProxy.ToStringIP().c_str());
             curl_easy_setopt(curl, CURLOPT_PROXYPORT, addrProxy.GetPort());
             curl_easy_setopt(curl, CURLOPT_PROXYTYPE, CURLPROXY_SOCKS4);
@@ -359,13 +361,12 @@ void ThreadUpdateFromDataFeed(void* parg)
     while (true)
     {
 #ifdef TESTING
-        Sleep(200);
+        MilliSleep(200);
 #else
-        Sleep(1000);
+        MilliSleep(1000);
 #endif
 
-        if (fShutdown)
-            break;
+        boost::this_thread::interruption_point();
 
         int64 now = GetTime();
 
@@ -391,6 +392,6 @@ void ThreadUpdateFromDataFeed(void* parg)
 
 void StartUpdateFromDataFeed()
 {
-    if (!CreateThread(ThreadUpdateFromDataFeed, NULL))
-        printf("Error; CreateThread(ThreadUpdateFromDataFeed) failed\n");
+    if (!NewThread(ThreadUpdateFromDataFeed, NULL))
+        printf("Error: NewThread(ThreadUpdateFromDataFeed) failed\n");
 }

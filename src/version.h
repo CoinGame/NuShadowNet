@@ -8,28 +8,18 @@
 #ifndef NU_VERSION_H
 #define NU_VERSION_H
 
+#include "clientversion.h"
 #include <string>
 
 //
 // client versioning
 //
 
-// These need to be macro's, as version.cpp's voodoo requires it
-
-// nu version
-#define CLIENT_VERSION_MAJOR       2
-#define CLIENT_VERSION_MINOR       1
-#define CLIENT_VERSION_REVISION    0
-
 static const int CLIENT_VERSION =
                            1000000 * CLIENT_VERSION_MAJOR
                          +   10000 * CLIENT_VERSION_MINOR
-                         +     100 * CLIENT_VERSION_REVISION;
-
-// peercoin version 0.3.0.0 - reference for code tracking
-
-// bitcoin version 0.6.3.0 - reference for code tracking
-
+                         +     100 * CLIENT_VERSION_REVISION
+                         +       1 * CLIENT_VERSION_BUILD;
 
 extern const std::string CLIENT_NAME;
 extern const std::string CLIENT_BUILD;
@@ -78,5 +68,8 @@ static const int NOBLKS_VERSION_END = 1;
 
 // BIP 0031, pong message, is enabled for all versions AFTER this one
 static const int BIP0031_VERSION = 1;
+
+// "mempool" command, enhanced "getdata" behavior starts with this version:
+static const int MEMPOOL_GD_VERSION = 60002;
 
 #endif

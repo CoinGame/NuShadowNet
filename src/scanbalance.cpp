@@ -8,6 +8,7 @@
 #include "init.h"
 #include "util.h"
 #include "scanbalance.h"
+#include "txdb.h"
 
 #include <boost/filesystem.hpp>
 #include <boost/filesystem/fstream.hpp>
@@ -21,25 +22,33 @@
 using namespace std;
 using namespace boost;
 
-static void ScanTransactionInputs(CTxDB& txdb, const CTransaction& tx, BalanceMap& mapBalance)
+static void ScanTransactionInputs(CCoinsViewCache& view, const CTransaction& tx, BalanceMap& mapBalance)
 {
     if (tx.IsCoinBase() || tx.IsCustodianGrant()) return;
 
     BOOST_FOREACH(const CTxIn& txi, tx.vin)
     {
-        CTransaction ti;
-        if (!txdb.ReadDiskTx(txi.prevout, ti))
+        CDiskTxPos postx;
+        CTransaction txPrev;
+        if (pblocktree->ReadTxIndex(txi.prevout.hash, postx))
         {
-            string s = strprintf("Failed to load transaction %s", txi.ToStringShort().c_str());
-            throw runtime_error(s);
+            CAutoFile file(OpenBlockFile(postx, true), SER_DISK, CLIENT_VERSION);
+            CBlockHeader header;
+            try {
+                file >> header;
+                fseek(file, postx.nTxOffset, SEEK_CUR);
+                file >> txPrev;
+            } catch (std::exception &e) {
+                throw runtime_error("deserialize or I/O error in ScanTransactionInputs");
+            }
+            if (txPrev.GetHash() != txi.prevout.hash)
+                throw runtime_error("txid mismatch in ScanTransactionInputs");
         }
-        if (txi.prevout.n >= ti.vout.size())
-        {
-            string s = strprintf("Invalid index in transaction %s", txi.ToStringShort().c_str());
-            throw runtime_error(s);
-        }
+        else
+            throw runtime_error("tx missing in tx index in ScanTransactionInputs");
 
-        CTxOut prevOut = ti.vout[txi.prevout.n];
+        const CTransaction& ti = txPrev;
+        const CTxOut& prevOut = ti.vout[txi.prevout.n];
         CTxDestination dest;
         ExtractDestination(prevOut.scriptPubKey, dest);
         CBitcoinAddress addr(dest, 'S');
@@ -75,6 +84,9 @@ static void ScanTransactionOutputs(const CTransaction& tx, BalanceMap& mapBalanc
 
 void GetAddressBalances(unsigned int cutoffTime, BalanceMap& mapBalance)
 {
+    if (!fTxIndex)
+        throw runtime_error("Transaction index is required to get balance at a particular time");
+
     CBlockIndex* pblk0 = pindexGenesisBlock, *pblk1 = pindexBest;
     if (!pblk0) throw runtime_error("No genesis block.");
     if (!pblk1) throw runtime_error("No best block chain.");
@@ -82,18 +94,19 @@ void GetAddressBalances(unsigned int cutoffTime, BalanceMap& mapBalance)
     if (cutoffTime>pblk1->nTime)
         throw runtime_error("Cutoff date later than most recent block.");
 
-    CTxDB txdb("r");
+    LOCK(cs_main);
+    CCoinsViewCache view(*pcoinsTip, true);
     int nBlks = 0;
     while (pblk0 != pblk1)
     {
         if (pblk0->nTime >= cutoffTime) break;
 
         CBlock block;
-        block.ReadFromDisk(pblk0, true);
+        block.ReadFromDisk(pblk0);
 
         BOOST_FOREACH(const CTransaction& tx, block.vtx)
         {
-            ScanTransactionInputs(txdb, tx, mapBalance);
+            ScanTransactionInputs(view, tx, mapBalance);
             ScanTransactionOutputs(tx, mapBalance);
         }
 

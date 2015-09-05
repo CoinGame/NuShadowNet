@@ -27,7 +27,7 @@ void MotionVoteDialog::setModel(WalletModel *model)
 
     ui->table->setRowCount(0);
     ui->table->setRowCount(vote.vMotion.size());
-    for (int i = 0; i < vote.vMotion.size(); i++)
+    for (size_t i = 0; i < vote.vMotion.size(); i++)
     {
         const uint160& motionVote = vote.vMotion[i];
 

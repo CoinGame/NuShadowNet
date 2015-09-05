@@ -16,13 +16,14 @@ seed = CoinContainer.new(
     splitshareoutputs: 100000,
     timetravel: start_time_shift,
   },
+  gdb: false,
   delete_at_exit: true,
 )
 
 puts "Creating node"
 node = CoinContainer.new(
-  image: 'nubit/0.4.2',
-  bind_code: false,
+  image: 'nubit/base',
+  bind_code: true,
   links: [seed],
   remove_wallet_after_shutdown: true,
   delete_at_exit: true,

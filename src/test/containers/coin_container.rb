@@ -12,6 +12,7 @@ class CoinContainer
       remove_wallet_after_shutdown: false,
       remove_wallet_before_startup: false,
       before_start_commands: [],
+      gdb: true,
     }
 
     options = default_options.merge(options)
@@ -59,6 +60,7 @@ class CoinContainer
       stakegen: false,
       unpark: false,
       checkblocks: -1,
+      debugmint: true,
     }
 
     args = default_args.merge(options[:args] || {})
@@ -93,7 +95,12 @@ class CoinContainer
 
     bash_cmds += options[:before_start_commands]
 
-    bash_cmds += ["./nud " + cmd_args.join(" ")]
+    start_cmd = ""
+    if options[:gdb]
+      start_cmd << "/usr/bin/gdb --batch --quiet -ex 'run' -ex 'bt full' -ex 'quit' --args "
+    end
+    start_cmd << "./nud " + cmd_args.join(" ")
+    bash_cmds += [start_cmd]
 
     if options[:remove_addr_after_shutdown]
       bash_cmds += ["rm /root/.nu/testnet/addr.dat"]

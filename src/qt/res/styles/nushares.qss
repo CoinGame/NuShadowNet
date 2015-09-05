@@ -102,10 +102,6 @@ QStatusBar {
 QStatusBar .progressBarLabel {
   color: #ffffff; }
 
-QStatusBar > .statusBarStyle {
-  color: #ffffff;
-}
-
 QTimeEdit {
   background-color: #f8f8f8; }
 

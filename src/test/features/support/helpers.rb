@@ -1,6 +1,6 @@
 require 'timeout'
 def wait_for(timeout_ratio = 1.0)
-  timeout = 5.0 * timeout_ratio
+  timeout = (ENV["TIMEOUT"] || 5.0).to_f * timeout_ratio
   last_exception = nil
   begin
     Timeout.timeout(timeout) do

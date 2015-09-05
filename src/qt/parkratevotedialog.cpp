@@ -69,7 +69,7 @@ void ParkRateVoteDialog::setModel(WalletModel *model)
     CVote vote = model->getVote();
 
     CParkRateVote parkRateVote;
-    for (int i = 0; i < vote.vParkRateVote.size(); i++)
+    for (size_t i = 0; i < vote.vParkRateVote.size(); i++)
         if (vote.vParkRateVote[i].cUnit == 'B')
         {
             parkRateVote = vote.vParkRateVote[i];
@@ -79,7 +79,7 @@ void ParkRateVoteDialog::setModel(WalletModel *model)
     const vector<CParkRate>& vParkRate = parkRateVote.vParkRate;
 
     ui->table->setRowCount(vParkRate.size());
-    for (int i = 0; i < vParkRate.size(); i++)
+    for (size_t i = 0; i < vParkRate.size(); i++)
     {
         const CParkRate& parkRate = vParkRate[i];
 

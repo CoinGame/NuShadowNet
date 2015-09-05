@@ -24,7 +24,7 @@ public:
     int64 premium;
     int64 remaining;
     CBlockIndex* blockIndex;
-    unsigned int lastUpdateBestHeight;
+    int lastUpdateBestHeight;
 
     static bool extract(const CWallet* wallet, const COutPoint& out, ParkRecord& record)
     {
@@ -112,8 +112,6 @@ public:
 
         if (wtx.vout.size() <= n)
             return;
-
-        const CTxOut& txo = wtx.vout[n];
 
         CBlockIndex *pindex = NULL;
         depth = wtx.GetDepthInMainChain(pindex);

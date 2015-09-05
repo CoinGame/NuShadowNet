@@ -83,7 +83,7 @@ end
 When(/^node "(.*?)" sends the raw transaction "(.*?)"$/) do |arg1, arg2|
   node = @nodes[arg1]
   raw_tx = @raw_tx[arg2]
-  node.rpc("sendrawtransaction", raw_tx, 1)
+  node.rpc("sendrawtransaction", raw_tx)
 end
 
 Then(/^node "(.*?)" should reach an unspent amount of "(.*?)" on address "(.*?)"$/) do |arg1, arg2, arg3|

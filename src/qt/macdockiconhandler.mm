@@ -59,6 +59,8 @@ MacDockIconHandler::MacDockIconHandler() : QObject()
 #if QT_VERSION < 0x050000
     qt_mac_set_dock_menu(this->m_dockMenu);
 #endif
+    this->setMainWindow(NULL);
+
     [pool release];
 }
 

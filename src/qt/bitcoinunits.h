@@ -5,10 +5,12 @@
 #include <QAbstractListModel>
 
 /** Bitcoin unit definitions. Encapsulates parsing and formatting
-   and serves as list model for dropdown selection boxes.
+   and serves as list model for drop-down selection boxes.
 */
 class BitcoinUnits: public QAbstractListModel
 {
+    Q_OBJECT
+
 public:
     explicit BitcoinUnits(QObject *parent);
 
@@ -24,7 +26,7 @@ public:
     //! Unit conversion and formatting
     ///@{
 
-    //! Get list of units, for dropdown box
+    //! Get list of units, for drop-down box
     static QList<Unit> availableUnits();
     //! nubit: The name of the base unit
     static QString baseName(unsigned char baseName = baseUnit);
@@ -51,7 +53,7 @@ public:
     static unsigned char baseUnit;
 
     //! @name AbstractListModel implementation
-    //! List model for unit dropdown selection box.
+    //! List model for unit drop-down selection box.
     ///@{
     enum RoleIndex {
         /** Unit identifier */
@@ -60,6 +62,7 @@ public:
     int rowCount(const QModelIndex &parent) const;
     QVariant data(const QModelIndex &index, int role) const;
     ///@}
+
 private:
     QList<BitcoinUnits::Unit> unitlist;
 };

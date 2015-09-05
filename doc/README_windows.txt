@@ -1,7 +1,10 @@
 Nu 2.1.0 BETA
-Copyright (c) 2014 Nu Developers
-
-## End-User License Agreement
+Copyright (c) 2014-2015 Nu Developers
+Distributed under the MIT/X11 software license, see the accompanying
+file COPYING or http://www.opensource.org/licenses/mit-license.php.
+This product includes software developed by the OpenSSL Project for use in
+the OpenSSL Toolkit (http://www.openssl.org/).  This product includes
+cryptographic software written by Eric Young (eay@cryptsoft.com).
 
 This agreement is between you (either an individual or a single entity) and the Nu developers. By installing, copy, or otherwise using the Nu software ("NU"), you agree to be bound by the terms of this EULA. If you do not agree to the terms of this EULA, do not install or use the product.
 

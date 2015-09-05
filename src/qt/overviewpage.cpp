@@ -1,6 +1,7 @@
 #include "overviewpage.h"
 #include "ui_overviewpage.h"
 
+#include "clientmodel.h"
 #include "walletmodel.h"
 #include "bitcoinunits.h"
 #include "optionsmodel.h"
@@ -45,9 +46,10 @@ public:
         bool confirmed = index.data(TransactionTableModel::ConfirmedRole).toBool();
         QVariant value = index.data(Qt::ForegroundRole);
         QColor foreground = option.palette.color(QPalette::Text);
-        if(qVariantCanConvert<QColor>(value))
+        if(value.canConvert<QBrush>())
         {
-            foreground = qvariant_cast<QColor>(value);
+            QBrush brush = qvariant_cast<QBrush>(value);
+            foreground = brush.color();
         }
 
         painter->setPen(foreground);
@@ -92,51 +94,37 @@ public:
 OverviewPage::OverviewPage(QWidget *parent) :
     QWidget(parent),
     ui(new Ui::OverviewPage),
+    clientModel(0),
+    walletModel(0),
     currentBalance(-1),
     currentStake(0),
     currentUnconfirmedBalance(-1),
-    txdelegate(new TxViewDelegate())
+    currentImmatureBalance(-1),
+    txdelegate(new TxViewDelegate()),
+    filter(0)
 {
     ui->setupUi(this);
 
-    // Balance: <balance>
-    ui->labelBalance->setFont(QFont("Monospace", -1, QFont::Bold));
-    ui->labelBalance->setToolTip(tr("Your current balance"));
-    ui->labelBalance->setTextInteractionFlags(Qt::TextSelectableByMouse|Qt::TextSelectableByKeyboard);
-
-    // ppcoin: stake: <stake>
-    ui->labelStake->setFont(QFont("Monospace", -1, QFont::Bold));
-    ui->labelStake->setToolTip(tr("Your current stake"));
-    ui->labelStake->setTextInteractionFlags(Qt::TextSelectableByMouse|Qt::TextSelectableByKeyboard);
-
-    // Unconfirmed balance: <balance>
-    ui->labelUnconfirmed->setFont(QFont("Monospace", -1, QFont::Bold));
-    ui->labelUnconfirmed->setToolTip(tr("Total of transactions that have yet to be confirmed, and do not yet count toward the current balance"));
-    ui->labelUnconfirmed->setTextInteractionFlags(Qt::TextSelectableByMouse|Qt::TextSelectableByKeyboard);
-
-    // nubit: parked: <parked>
-    ui->labelParked->setFont(QFont("Monospace", -1, QFont::Bold));
-    ui->labelParked->setToolTip(tr("Your current parked amount"));
-    ui->labelParked->setTextInteractionFlags(Qt::TextSelectableByMouse|Qt::TextSelectableByKeyboard);
-
-    ui->labelNumTransactions->setToolTip(tr("Total number of transactions in wallet"));
-
     // Recent transactions
-    ui->listTransactions->setStyleSheet("QListView { background:transparent }");
     ui->listTransactions->setItemDelegate(txdelegate);
     ui->listTransactions->setIconSize(QSize(DECORATION_SIZE, DECORATION_SIZE));
-    ui->listTransactions->setSelectionMode(QAbstractItemView::NoSelection);
     ui->listTransactions->setMinimumHeight(NUM_ITEMS * (DECORATION_SIZE + 2));
     ui->listTransactions->setAttribute(Qt::WA_MacShowFocusRect, false);
 
-    connect(ui->listTransactions, SIGNAL(clicked(QModelIndex)), this, SIGNAL(transactionClicked(QModelIndex)));
+    connect(ui->listTransactions, SIGNAL(clicked(QModelIndex)), this, SLOT(handleTransactionClicked(QModelIndex)));
 
-    // Hiding doesn't remove the margin so we have to remove the widgets
-    // See https://bugreports.qt-project.org/browse/QTBUG-6864
-    QFormLayout* formLayout = (QFormLayout*)ui->frame->layout();
-    formLayout->getWidgetPosition(ui->labelStake, &stakeRow, NULL);
-    removeLabels(ui->labelParkedLabel, ui->labelParked);
-    removeLabels(ui->labelStakeLabel, ui->labelStake);
+    // init "out of sync" warning labels
+    ui->labelWalletStatus->setText("(" + tr("out of sync") + ")");
+    ui->labelTransactionsStatus->setText("(" + tr("out of sync") + ")");
+
+    // start with displaying the "out of sync" warnings
+    showOutOfSyncWarning(true);
+}
+
+void OverviewPage::handleTransactionClicked(const QModelIndex &index)
+{
+    if(filter)
+        emit transactionClicked(filter->mapToSource(index));
 }
 
 OverviewPage::~OverviewPage()
@@ -144,59 +132,56 @@ OverviewPage::~OverviewPage()
     delete ui;
 }
 
-void OverviewPage::removeLabels(QLabel* labelLabel, QLabel* label)
+void OverviewPage::setBalance(qint64 balance, qint64 stake, qint64 unconfirmedBalance, qint64 immatureBalance, qint64 parked)
 {
-    labelLabel->hide();
-    label->hide();
-    ui->frame->layout()->removeWidget(labelLabel);
-    ui->frame->layout()->removeWidget(label);
-}
-
-void OverviewPage::insertLabels(QLabel* labelLabel, QLabel* label, int row)
-{
-    QFormLayout* formLayout = (QFormLayout*)ui->frame->layout();
-
-    formLayout->insertRow(row, labelLabel, label);
-    labelLabel->show();
-    label->show();
-}
-
-void OverviewPage::setBalance(qint64 balance, qint64 stake, qint64 unconfirmedBalance, qint64 parked)
-{
-    int unit = model->getOptionsModel()->getDisplayUnit();
+    int unit = walletModel->getOptionsModel()->getDisplayUnit();
     currentBalance = balance;
     currentStake = stake;
     currentUnconfirmedBalance = unconfirmedBalance;
+    currentImmatureBalance = immatureBalance;
     currentParked = parked;
     ui->labelBalance->setText(BitcoinUnits::formatWithUnit(unit, balance));
     ui->labelStake->setText(BitcoinUnits::formatWithUnit(unit, stake));
     ui->labelUnconfirmed->setText(BitcoinUnits::formatWithUnit(unit, unconfirmedBalance));
+    ui->labelImmature->setText(BitcoinUnits::formatWithUnit(unit, immatureBalance));
     ui->labelParked->setText(BitcoinUnits::formatWithUnit(unit, parked));
 
-    if (model->getUnit() == 'S')
-    {
-        removeLabels(ui->labelParkedLabel, ui->labelParked);
-        insertLabels(ui->labelStakeLabel, ui->labelStake, stakeRow);
-    }
+    // only show immature (newly mined) balance if it's non-zero, so as not to complicate things
+    // for the non-mining users
+    bool showImmature = immatureBalance != 0;
+    ui->labelImmature->setVisible(showImmature);
+    ui->labelImmatureText->setVisible(showImmature);
+
+    bool showParked = false;
+    bool showStake = false;
+    if (walletModel->getUnit() == 'S')
+        showStake = true;
     else
-    {
-        removeLabels(ui->labelStakeLabel, ui->labelStake);
-        insertLabels(ui->labelParkedLabel, ui->labelParked, stakeRow);
-    }
+        showParked = true;
+    ui->labelParked->setVisible(showParked);
+    ui->labelParkedText->setVisible(showParked);
+    ui->labelStake->setVisible(showStake);
+    ui->labelStakeText->setVisible(showStake);
 }
 
-void OverviewPage::setNumTransactions(int count)
+void OverviewPage::setClientModel(ClientModel *model)
 {
-    ui->labelNumTransactions->setText(QLocale::system().toString(count));
-}
-
-void OverviewPage::setModel(WalletModel *model)
-{
-    this->model = model;
+    this->clientModel = model;
     if(model)
     {
+        // Show warning if this is a prerelease version
+        connect(model, SIGNAL(alertsChanged(QString)), this, SLOT(updateAlerts(QString)));
+        updateAlerts(model->getStatusBarWarnings());
+    }
+}
+
+void OverviewPage::setWalletModel(WalletModel *model)
+{
+    this->walletModel = model;
+    if(model && model->getOptionsModel())
+    {
         // Set up transaction list
-        TransactionFilterProxy *filter = new TransactionFilterProxy();
+        filter = new TransactionFilterProxy();
         filter->setSourceModel(model->getTransactionTableModel());
         filter->setLimit(NUM_ITEMS);
         filter->setDynamicSortFilter(true);
@@ -207,25 +192,38 @@ void OverviewPage::setModel(WalletModel *model)
         ui->listTransactions->setModelColumn(TransactionTableModel::ToAddress);
 
         // Keep up to date with wallet
-        setBalance(model->getBalance(), model->getStake(), model->getUnconfirmedBalance(), model->getParked());
-        connect(model, SIGNAL(balanceChanged(qint64, qint64, qint64, qint64)), this, SLOT(setBalance(qint64, qint64, qint64, qint64)));
+        setBalance(model->getBalance(), model->getStake(), model->getUnconfirmedBalance(), model->getImmatureBalance(), model->getParked());
+        connect(model, SIGNAL(balanceChanged(qint64, qint64, qint64, qint64, qint64)), this, SLOT(setBalance(qint64, qint64, qint64, qint64, qint64)));
 
-        setNumTransactions(model->getNumTransactions());
-        connect(model, SIGNAL(numTransactionsChanged(int)), this, SLOT(setNumTransactions(int)));
+        connect(model->getOptionsModel(), SIGNAL(displayUnitChanged(int)), this, SLOT(updateDisplayUnit()));
+    }
 
-        connect(model->getOptionsModel(), SIGNAL(displayUnitChanged(int)), this, SLOT(displayUnitChanged()));
+    // update the display unit, to not use the default ("BTC")
+    updateDisplayUnit();
+}
 
-        emit displayUnitChanged();
+void OverviewPage::updateDisplayUnit()
+{
+    if(walletModel && walletModel->getOptionsModel())
+    {
+        if(currentBalance != -1)
+            setBalance(currentBalance, currentStake, currentUnconfirmedBalance, currentImmatureBalance, currentParked);
+
+        // Update txdelegate->unit with the current unit
+        txdelegate->unit = walletModel->getOptionsModel()->getDisplayUnit();
+
+        ui->listTransactions->update();
     }
 }
 
-void OverviewPage::displayUnitChanged()
+void OverviewPage::updateAlerts(const QString &warnings)
 {
-    if(!model || !model->getOptionsModel())
-        return;
-    if(currentBalance != -1)
-        setBalance(currentBalance, currentStake, currentUnconfirmedBalance, currentParked);
+    this->ui->labelAlerts->setVisible(!warnings.isEmpty());
+    this->ui->labelAlerts->setText(warnings);
+}
 
-    txdelegate->unit = model->getOptionsModel()->getDisplayUnit();
-    ui->listTransactions->update();
+void OverviewPage::showOutOfSyncWarning(bool fShow)
+{
+    ui->labelWalletStatus->setVisible(fShow);
+    ui->labelTransactionsStatus->setVisible(fShow);
 }

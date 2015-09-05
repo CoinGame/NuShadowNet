@@ -70,7 +70,7 @@ void DividendDistributor::GenerateOutputs(int nTransactions, vector<Object> &vTr
     if (vDistribution.size() == 0)
         throw runtime_error("No address to distribute to");
 
-    if (nTransactions > vDistribution.size())
+    if (nTransactions > (int)vDistribution.size())
         throw runtime_error("Output split in too many transactions");
 
     vTransactionOuts.assign(nTransactions, Object());
@@ -101,7 +101,7 @@ DividendDistributor GenerateDistribution(const BalanceMap &mapBalance, double dA
 {
     double dMinPayout = GetMinimumDividendPayout();
 
-    printf("Distributing %f peercoins to %d addresses with a minimum payout of %f\n", dAmount, mapBalance.size(), dMinPayout);
+    printf("Distributing %f peercoins to %"PRIszu" addresses with a minimum payout of %f\n", dAmount, mapBalance.size(), dMinPayout);
 
     try {
         DividendDistributor distributor(mapBalance);
@@ -164,7 +164,7 @@ Array SendDistribution(const DividendDistributor &distributor)
             sendmanyParams.push_back(output);
             std::string result;
             printf("Sending output %d from account \"%s\"\n", i, sAccount.c_str());
-            result = CallPeercoinRPC("sendmany", sendmanyParams);
+            result = write_string(Value(CallPeercoinRPC("sendmany", sendmanyParams)), false);
             printf("Successfully sent output %d: %s\n", i, result.c_str());
             results.push_back(result);
             i++;

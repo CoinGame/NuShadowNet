@@ -593,7 +593,7 @@ Then(/^node "(.*?)" should use protocol (\d+)$/) do |arg1, arg2|
 end
 
 Then(/^node "(.*?)" should have (\d+) (\w+) transactions?$/) do |arg1, arg2, unit_name|
-  @listtransactions = @nodes[arg1].unit_rpc(unit(unit_name), "listtransactions")
+  @listtransactions = @nodes[arg1].unit_rpc(unit(unit_name), "listtransactions", "*", 1000)
   begin
     expect(@listtransactions.size).to eq(arg2.to_i)
   rescue RSpec::Expectations::ExpectationNotMetError
@@ -643,10 +643,10 @@ Then(/^the (\d+)\S+ transaction should be a send of "([^"]*?)"$/) do |arg1, arg2
   expect(tx["amount"]).to eq(-parse_number(arg2))
 end
 
-Then(/^the (\d+)st transaction should be the initial distribution of shares$/) do |arg1|
+Then(/^the (\d+)\S+ transaction should be the initial distribution of shares$/) do |arg1|
   tx = @listtransactions[arg1.to_i - 1]
   expect(tx["category"]).to eq("receive")
-  expect(tx["amount"]).to eq(parse_number("10,000,000"))
+  expect(tx["amount"]).to eq(parse_number("1,000,000"))
 end
 
 Then(/^block "(.*?)" should contain transaction "(.*?)"$/) do |arg1, arg2|

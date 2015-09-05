@@ -45,7 +45,7 @@ bool ExtractVote(const CScript& scriptPubKey, CVote& voteRet, int nProtocolVersi
 
     vector<vector<unsigned char> > stack;
     CTransaction fakeTx;
-    EvalScript(stack, voteScript, fakeTx, 0, 0);
+    EvalScript(stack, voteScript, fakeTx, 0, SCRIPT_VERIFY_STRICTENC, 0);
 
     if (stack.size() != 1)
         return false;
@@ -131,7 +131,7 @@ bool ExtractParkRateResult(const CScript& scriptPubKey, CParkRateVote& parkRateR
 
     vector<vector<unsigned char> > stack;
     CTransaction fakeTx;
-    EvalScript(stack, script, fakeTx, 0, 0);
+    EvalScript(stack, script, fakeTx, 0, SCRIPT_VERIFY_STRICTENC, 0);
 
     if (stack.size() != 1)
         return false;
@@ -539,7 +539,7 @@ bool ExtractVotes(const CBlock& block, const CBlockIndex *pindexprev, unsigned i
     vVoteRet.push_back(vote);
 
     const CBlockIndex *pindex = pindexprev;
-    for (int i=0; i<nCount-1 && pindex; i++)
+    for (int i=0; i<(int)nCount-1 && pindex; i++)
     {
         if (pindex->IsProofOfStake())
             vVoteRet.push_back(pindex->vote);
@@ -732,7 +732,7 @@ int GetProtocolForNextBlock(const CBlockIndex* pPrevIndex)
  * The new protocol applies to the block AFTER the pPrevIndex.
  */
 bool IsProtocolActiveForNextBlock(const CBlockIndex* pPrevIndex,
-                           int nSwitchTime, int nProtocolVersion,
+                           unsigned int nSwitchTime, int nProtocolVersion,
                            int nRequired, int nToCheck)
 {
     if (pPrevIndex == NULL)
