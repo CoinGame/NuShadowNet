@@ -185,6 +185,21 @@ bool CBlockTreeDB::ReadFlag(const std::string &name, bool &fValue) {
     return true;
 }
 
+bool CBlockTreeDB::WriteNext(const uint256& hashBlock, const uint256& hashNext)
+{
+    return Write(make_pair('n', hashBlock), hashNext);
+}
+
+bool CBlockTreeDB::EraseNext(const uint256& hashBlock)
+{
+    return Erase(make_pair('n', hashBlock));
+}
+
+bool CBlockTreeDB::ReadNext(const uint256& hashBlock, uint256& hashNext)
+{
+    return Read(make_pair('n', hashBlock), hashNext);
+}
+
 bool CBlockTreeDB::LoadBlockIndexGuts()
 {
     leveldb::Iterator *pcursor = NewIterator();
@@ -207,38 +222,8 @@ bool CBlockTreeDB::LoadBlockIndexGuts()
                 CDiskBlockIndex diskindex;
                 ssValue >> diskindex;
 
-                // Construct block index object
-                CBlockIndex* pindexNew = InsertBlockIndex(diskindex.GetBlockHash());
-                pindexNew->pprev          = InsertBlockIndex(diskindex.hashPrev);
-                pindexNew->nHeight        = diskindex.nHeight;
-                pindexNew->nFile          = diskindex.nFile;
-                pindexNew->nDataPos       = diskindex.nDataPos;
-                pindexNew->nUndoPos       = diskindex.nUndoPos;
-                pindexNew->nVersion       = diskindex.nVersion;
-                pindexNew->hashMerkleRoot = diskindex.hashMerkleRoot;
-                pindexNew->nTime          = diskindex.nTime;
-                pindexNew->nBits          = diskindex.nBits;
-                pindexNew->nNonce         = diskindex.nNonce;
-                pindexNew->nStatus        = diskindex.nStatus;
-                pindexNew->nTx            = diskindex.nTx;
-
-                // ppcoin related block index fields
-                pindexNew->nMint          = diskindex.nMint;
-                pindexNew->mapMoneySupply = diskindex.mapMoneySupply;
-                pindexNew->nFlags         = diskindex.nFlags;
-                pindexNew->nStakeModifier = diskindex.nStakeModifier;
-                pindexNew->prevoutStake   = diskindex.prevoutStake;
-                pindexNew->nStakeTime     = diskindex.nStakeTime;
-                pindexNew->hashProofOfStake = diskindex.hashProofOfStake;
-
-                // nubit related fields
-                pindexNew->vote                   = diskindex.vote;
-                pindexNew->vote.nCoinAgeDestroyed = diskindex.nCoinAgeDestroyed;
-                pindexNew->vParkRateResult        = diskindex.vParkRateResult;
-                pindexNew->nCoinAgeDestroyed      = diskindex.nCoinAgeDestroyed;
-                pindexNew->vElectedCustodian      = diskindex.vElectedCustodian;
-                pindexNew->nProtocolVersion       = diskindex.nProtocolVersion;
-                pindexNew->mapVotedFee            = diskindex.mapVotedFee;
+                // nubit: CDiskBlockIndex loading is done in BlockMap::load()
+                CBlockIndex* pindexNew = mapBlockIndex.load_at(diskindex.GetBlockHash(), diskindex);
 
                 // Watch for genesis block
                 if (pindexGenesisBlock == NULL && diskindex.GetBlockHash() == hashGenesisBlock)
@@ -250,6 +235,11 @@ bool CBlockTreeDB::LoadBlockIndexGuts()
                 // ppcoin: build setStakeSeen
                 if (pindexNew->IsProofOfStake())
                     setStakeSeen.insert(make_pair(pindexNew->prevoutStake, pindexNew->nStakeTime));
+
+                if ((pindexNew->nStatus & BLOCK_VALID_MASK) >= BLOCK_VALID_TRANSACTIONS && !(pindexNew->nStatus & BLOCK_FAILED_MASK))
+                    setBlockIndexValid.insert(pindexNew);
+
+                mapBlockIndex.unload(diskindex.GetBlockHash());
 
                 pcursor->Next();
             } else {

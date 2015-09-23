@@ -158,7 +158,8 @@ OBJS= \
     obj/distribution.o \
     obj/vote.o \
     obj/liquidityinfo.o \
-    obj/datafeed.o
+    obj/datafeed.o \
+    obj/blockmap.o
 
 
 all: nud

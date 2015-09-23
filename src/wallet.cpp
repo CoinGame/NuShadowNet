@@ -894,7 +894,8 @@ int CWallet::ScanForWalletTransactions(CBlockIndex* pindexStart, bool fUpdate)
 {
     int ret = 0;
 
-    CBlockIndex* pindex = pindexStart;
+    CLockedBlockIndex pindex = pindexStart;
+    int nCount = 0;
     {
         LOCK(cs_wallet);
         while (pindex)
@@ -907,6 +908,9 @@ int CWallet::ScanForWalletTransactions(CBlockIndex* pindexStart, bool fUpdate)
                     ret++;
             }
             pindex = pindex->pnext;
+            nCount++;
+            if (nCount % 100 == 0)
+                mapBlockIndex.cleanup();
         }
     }
     return ret;

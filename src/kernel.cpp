@@ -137,6 +137,7 @@ static bool SelectBlockFromCandidates(
 // blocks.
 bool ComputeNextStakeModifier(const CBlockIndex* pindexCurrent, uint64& nStakeModifier, bool& fGeneratedStakeModifier)
 {
+    LOCK(mapBlockIndex.cs_cleanup);
     const CBlockIndex* pindexPrev = pindexCurrent->pprev;
     nStakeModifier = 0;
     fGeneratedStakeModifier = false;

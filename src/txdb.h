@@ -52,6 +52,10 @@ public:
     bool ReadCheckpointPubKey(std::string& strPubKey);
     bool WriteCheckpointPubKey(const std::string& strPubKey);
     bool LoadBlockIndexGuts();
+
+    bool WriteNext(const uint256& hashBlock, const uint256& hashNext);
+    bool EraseNext(const uint256& hashBlock);
+    bool ReadNext(const uint256& hashBlock, uint256& hashNext);
 };
 
 #endif // BITCOIN_TXDB_LEVELDB_H
