@@ -5407,6 +5407,9 @@ CBlockTemplate* CreateNewBlock(CReserveKey& reservekey, CWallet* pwallet, bool f
             nLastCoinStakeSearchInterval = nSearchTime - nLastCoinStakeSearchTime;
             nLastCoinStakeSearchTime = nSearchTime;
         }
+        // nubit: no kernel found, do not bother creating the block
+        if (!pblock->IsProofOfStake())
+            return NULL;
     }
 
     pblock->nBits = GetNextTargetRequired(pindexPrev, pblock->IsProofOfStake());
@@ -5847,7 +5850,10 @@ void BitcoinMiner(CWallet *pwallet, bool fProofOfStake)
 
         auto_ptr<CBlockTemplate> pblocktemplate(CreateNewBlock(reservekey, pwallet, fProofOfStake));
         if (!pblocktemplate.get())
-            return;
+        {
+            MilliSleep(500);
+            continue;
+        }
         CBlock *pblock = &pblocktemplate->block;
         IncrementExtraNonce(pblock, pindexPrev, nExtraNonce);
 
