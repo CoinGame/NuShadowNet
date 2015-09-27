@@ -39,9 +39,14 @@ Then define the version you want to build (v$VERSION must be an annotated tag on
 
     export VERSION=2.0.0-RC1
 
+Set the number of processors you want to allocate to the build:
+
+    export NPROCS=4
+    export MEMORY=4000
+
 Then to build the Linux binaries:
 
-    ./bin/gbuild --commit nubit=v${VERSION} ../nubit/contrib/gitian-descriptors/gitian-linux.yml
+    ./bin/gbuild -j $NPROCS -m $MEMORY --commit nubit=v${VERSION} ../nubit/contrib/gitian-descriptors/gitian-linux.yml
     pushd build/out
     zip -r nu-${VERSION}-linux-gitian.zip *
     mv nu-${VERSION}-linux-gitian.zip /nubit/
@@ -49,7 +54,7 @@ Then to build the Linux binaries:
 
 And to build the Windows binaries:
 
-    ./bin/gbuild --commit nubit=v${VERSION} ../nubit/contrib/gitian-descriptors/gitian-win.yml
+    ./bin/gbuild -j $NPROCS -m $MEMORY --commit nubit=v${VERSION} ../nubit/contrib/gitian-descriptors/gitian-win.yml
     pushd build/out
     zip -r nu-${VERSION}-win-gitian.zip *
     mv nu-${VERSION}-win-gitian.zip /nubit/
