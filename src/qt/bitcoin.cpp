@@ -227,6 +227,7 @@ int main(int argc, char *argv[])
         splash.show();
         splash.setAutoFillBackground(true);
         splashref = &splash;
+        MilliSleep(100);
     }
 
     app.processEvents();
