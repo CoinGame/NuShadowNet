@@ -6031,6 +6031,8 @@ void static ThreadStakeMinter(void* parg)
     }
     catch (std::exception& e) {
         PrintException(&e, "ThreadStakeMinter()");
+    } catch (boost::thread_interrupted) {
+        printf("ThreadStakeMinter interrupted\n");
     } catch (...) {
         PrintException(NULL, "ThreadStakeMinter()");
     }
