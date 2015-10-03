@@ -1474,28 +1474,9 @@ Value park(const Array& params, bool fHelp)
 
 Value getpremium(const Array& params, bool fHelp)
 {
-    if (fHelp || params.size() != 2)
-        throw runtime_error(
-            "getpremium <amount> <duration>\n"
-            "<amount> is a real and is rounded to the nearest 0.0001\n"
-            "<duration> is the number of blocks during which the amount would be parked");
-
-    int64 nAmount = AmountFromValue(params[0]);
-
-    int64 nDuration = params[1].get_int();
-    if (!ParkDurationRange(nDuration))
-        throw JSONRPCError(-5, "Invalid duration");
-
-    int64 nPremium = pindexBest->GetNextPremium(nAmount, nDuration, pwalletMain->GetUnit());
-
-    return FormatMoney(nPremium);
-}
-
-Value getblockpremium(const Array& params, bool fHelp)
-{
     if (fHelp || params.size() < 2 || params.size() > 3)
         throw runtime_error(
-            "getblockpremium <amount> <duration> [hash]\n"
+            "getpremium <amount> <duration> [hash]\n"
             "<amount> is a real and is rounded to the nearest 0.0001\n"
             "<duration> is the number of blocks during which the amount would be parked\n"
             "If [hash] is not specified, returns current expected parking premium");
@@ -1524,7 +1505,7 @@ Value getblockpremium(const Array& params, bool fHelp)
     }
     else
     {
-        //Case where hash is not given; does same thing as getpremium
+        //Case where hash is not given; does same thing as old getpremium
         int64 nPremium = pindexBest->GetNextPremium(nAmount, nDuration, pwalletMain->GetUnit());
 
         return FormatMoney(nPremium);
@@ -4784,7 +4765,6 @@ static const CRPCCommand vRPCCommands[] =
     { "park",                   &park,                   false },
     { "unpark",                 &unpark,                 false },
     { "getpremium",             &getpremium,             true },
-    { "getblockpremium",        &getblockpremium,        true },
     { "distribute",             &distribute,             true },
     { "addmultisigaddress",     &addmultisigaddress,     false },
     { "createmultisig",         &createmultisig,         true },
@@ -5595,8 +5575,6 @@ Array RPCConvertValues(const std::string &strMethod, const std::vector<std::stri
     if (strMethod == "park"                   && n > 4) ConvertTo<boost::int64_t>(params[4]);
     if (strMethod == "getpremium"             && n > 0) ConvertTo<double>(params[0]);
     if (strMethod == "getpremium"             && n > 1) ConvertTo<boost::int64_t>(params[1]);
-    if (strMethod == "getblockpremium"        && n > 0) ConvertTo<double>(params[0]);
-    if (strMethod == "getblockpremium"        && n > 1) ConvertTo<boost::int64_t>(params[1]);
     if (strMethod == "listtransactions"       && n > 1) ConvertTo<boost::int64_t>(params[1]);
     if (strMethod == "listtransactions"       && n > 2) ConvertTo<boost::int64_t>(params[2]);
     if (strMethod == "listaccounts"           && n > 0) ConvertTo<boost::int64_t>(params[0]);
