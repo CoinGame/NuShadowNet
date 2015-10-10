@@ -380,9 +380,16 @@ ReadKeyValue(CWallet* pwallet, CDataStream& ssKey, CDataStream& ssValue,
         {
             ssValue >> pwallet->setParked;
         }
-        else if (strType == "vote")
+        else if (strType == "uservote")
         {
             ssValue >> pwallet->vote;
+            pwallet->vote.Upgrade();
+        }
+        else if (strType == "vote") // old structure
+        {
+            CVote vote;
+            ssValue >> vote;
+            pwallet->vote = CUserVote(vote);
             pwallet->vote.Upgrade();
         }
         else if (strType == "datafeed")
