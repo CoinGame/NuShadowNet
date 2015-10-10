@@ -267,7 +267,7 @@ Then(/^nodes? (.+) (?:should be at|should reach|reach|reaches|is at|are at) bloc
       main.all? { |hash| hash == @blocks[block] }
     end
   rescue
-    raise "Not at block #{block}: #{nodes.map(&:top_hash).map { |hash| @blocks.key(hash) || hash }.inspect}"
+    raise "Not at block #{block} (#{@blocks[block]}): #{nodes.map(&:top_hash).map { |hash| @blocks.key(hash) || hash }.inspect}"
   end
 end
 
@@ -388,11 +388,11 @@ When(/^node "(.*?)" finds blocks until it reaches a higher trust than node "(.*?
   other_node = @nodes[arg2]
   require 'bigdecimal'
   require 'bigdecimal/util'
-  other_trust = other_node.info["trust"].to_d
+  other_trust = other_node.info["trust"].to_i(16)
   wait_for(2.0) do
     node.generate_stake
     time_travel(60)
-    trust = node.info["trust"].to_d
+    trust = node.info["trust"].to_i(16)
     trust > other_trust
   end
 end
