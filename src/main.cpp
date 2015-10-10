@@ -2016,10 +2016,10 @@ bool CBlock::ConnectBlock(CValidationState &state, CBlockIndex* pindex, CCoinsVi
     pindex->nMint = mapValueOut['S'] - mapValueIn['S'] + mapFees['S'];
     BOOST_FOREACH(unsigned char cUnit, sAvailableUnits)
     {
-        pindex->mapMoneySupply[cUnit] = (pindex->pprev? pindex->pprev->mapMoneySupply[cUnit] : 0) + mapValueOut[cUnit] - mapValueIn[cUnit];
+        pindex->mapMoneySupply[cUnit] = (pindex->pprev? pindex->pprev->GetMoneySupply(cUnit) : 0) + mapValueOut[cUnit] - mapValueIn[cUnit];
         // nubit: track amount parked
         if (cUnit != 'S')
-            pindex->mapTotalParked[cUnit] = (pindex->pprev? pindex->pprev->mapTotalParked[cUnit] : 0) + mapParked[cUnit];
+            pindex->mapTotalParked[cUnit] = (pindex->pprev? pindex->pprev->GetTotalParked(cUnit) : 0) + mapParked[cUnit];
     }
 
     // ppcoin: fees are not collected by miners as in bitcoin
