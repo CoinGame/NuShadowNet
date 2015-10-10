@@ -125,11 +125,13 @@ Value park(const Array& params, bool fHelp)
 
 Value getpremium(const Array& params, bool fHelp)
 {
-    if (fHelp || params.size() != 2)
+    if (fHelp || params.size() < 2 || params.size() > 3)
         throw runtime_error(
-            "getpremium <amount> <duration>\n"
+            "getpremium <amount> <duration> [hash]\n"
             "<amount> is a real and is rounded to the nearest 0.0001\n"
-            "<duration> is the number of blocks during which the amount would be parked");
+            "<duration> is the number of blocks during which the amount would be parked\n"
+            "If [hash] is not specified, returns current expected parking premium");
+
 
     int64 nAmount = AmountFromValue(params[0]);
 
@@ -137,9 +139,29 @@ Value getpremium(const Array& params, bool fHelp)
     if (!ParkDurationRange(nDuration))
         throw JSONRPCError(-5, "Invalid duration");
 
-    int64 nPremium = pindexBest->GetNextPremium(nAmount, nDuration, pwalletMain->GetUnit());
+    if (params.size() == 3)
+    {
+        //Case where hash is given; retrieves premium at particular block
+        std::string strHash = params[2].get_str();
+        uint256 hash(strHash);
 
-    return FormatMoney(nPremium);
+        if (mapBlockIndex.count(hash) == 0)
+            throw JSONRPCError(-5, "Block not found");
+
+        CBlockIndex* pblockindex = mapBlockIndex[hash];
+
+        int64 nPremium = pblockindex->GetPremium(nAmount, nDuration, pwalletMain->GetUnit());
+
+        return FormatMoney(nPremium);
+    }
+    else
+    {
+        //Case where hash is not given; does same thing as old getpremium
+        int64 nPremium = pindexBest->GetNextPremium(nAmount, nDuration, pwalletMain->GetUnit());
+
+        return FormatMoney(nPremium);
+    }
+
 }
 
 Value unpark(const Array& params, bool fHelp)
