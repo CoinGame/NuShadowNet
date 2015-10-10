@@ -302,7 +302,7 @@ CVote ParseVote(const Object& objVote)
 
                 feeVotes[cUnit] = feeAsSatoshi;
             }
-            vote.mapFeeVote = feeVotes;
+            vote.mapFeeVote.SetFromMap(feeVotes);
         }
         else
             throw runtime_error("Invalid vote object");

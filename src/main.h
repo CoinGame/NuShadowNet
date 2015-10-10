@@ -14,6 +14,7 @@
 #include "script.h"
 #include "vote.h"
 #include "blockmap.h"
+#include "unitmap.h"
 
 #include <list>
 
@@ -1949,8 +1950,8 @@ public:
 
     // ppcoin: money supply related block index fields
     int64 nMint;
-    std::map<unsigned char, int64> mapMoneySupply;
-    std::map<unsigned char, int64> mapTotalParked;
+    CUnitMap<int64> mapMoneySupply;
+    CUnitMap<int64> mapTotalParked;
 
     // ppcoin: proof-of-stake related block index fields
     unsigned int nFlags;  // ppcoin: block index flags
@@ -1978,7 +1979,7 @@ public:
     int nProtocolVersion;
 
     // nubit: the result of the fee vote
-    std::map<unsigned char, uint32_t> mapVotedFee;
+    CUnitMap<uint32_t> mapVotedFee;
 
     // nubit: previous block with an elected custodian
     CLazyBlockIndex pprevElected;
@@ -2227,20 +2228,16 @@ public:
 
     int64 GetMoneySupply(unsigned char cUnit) const
     {
-        std::map<unsigned char, int64>::const_iterator it = mapMoneySupply.find(cUnit);
-        if (it != mapMoneySupply.end())
-            return it->second;
-        else
+        if (!mapMoneySupply.Has(cUnit))
             return 0;
+        return mapMoneySupply[cUnit];
     }
 
     int64 GetTotalParked(unsigned char cUnit) const
     {
-        std::map<unsigned char, int64>::const_iterator it = mapTotalParked.find(cUnit);
-        if (it != mapTotalParked.end())
-            return it->second;
-        else
+        if (!mapTotalParked.Has(cUnit))
             return 0;
+        return mapTotalParked[cUnit];
     }
 
     const CBlockIndex* GetEffectiveFeeIndex() const
@@ -2253,11 +2250,9 @@ public:
 
     int64 GetVotedMinFee(unsigned char cUnit) const
     {
-        std::map<unsigned char, uint32_t>::const_iterator it = mapVotedFee.find(cUnit);
-        if (it != mapVotedFee.end())
-            return (int64)it->second;
-        else
+        if (!mapVotedFee.Has(cUnit))
             return GetDefaultFee(cUnit);
+        return mapVotedFee[cUnit];
     }
 
     int64 GetMinFee(unsigned char cUnit) const

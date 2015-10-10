@@ -61,7 +61,7 @@ Object voteToJSON(const CVote& vote)
     result.push_back(Pair("motions", motionVotes));
 
     Object feeVotes;
-    BOOST_FOREACH(const PAIRTYPE(unsigned char, uint32_t)& feeVote, vote.mapFeeVote)
+    BOOST_FOREACH(const PAIRTYPE(unsigned char, uint32_t)& feeVote, vote.mapFeeVote.GetMap())
         feeVotes.push_back(Pair(string(1, feeVote.first), (double)feeVote.second / COIN));
     result.push_back(Pair("fees", feeVotes));
 
