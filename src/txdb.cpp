@@ -273,3 +273,53 @@ bool CBlockTreeDB::WriteCheckpointPubKey(const string& strPubKey)
 {
     return Write(string("strCheckpointPubKey"), strPubKey);
 }
+
+
+static const int64 STAKE_MODIFIER_MIN_TIME = 1388534400;
+
+bool CBlockTreeDB::WriteStakeModifier(int64 nIntervalStart, uint64 nModifier)
+{
+    return Write(make_pair('m', VARINT(nIntervalStart - STAKE_MODIFIER_MIN_TIME)), nModifier);
+}
+
+bool CBlockTreeDB::EraseStakeModifier(int64 nIntervalStart)
+{
+    return Erase(make_pair('m', VARINT(nIntervalStart - STAKE_MODIFIER_MIN_TIME)));
+}
+
+bool CBlockTreeDB::FindStakeModifierAt(int64 nEnd, int64& nIntervalStartRet, uint64& nModifierRet)
+{
+    nModifierRet = 0;
+    nIntervalStartRet = 0;
+    bool fResult = false;
+
+    leveldb::Iterator *pcursor = NewIterator();
+
+    CDataStream ssKeySet(SER_DISK, CLIENT_VERSION);
+    ssKeySet << make_pair('m', VARINT(nEnd - STAKE_MODIFIER_MIN_TIME));
+    pcursor->Seek(ssKeySet.str());
+
+    if (pcursor->Valid())
+    {
+        try {
+            leveldb::Slice slKey = pcursor->key();
+            CDataStream ssKey(slKey.data(), slKey.data()+slKey.size(), SER_DISK, CLIENT_VERSION);
+            char chType;
+            ssKey >> chType;
+            if (chType == 'm') {
+                ssKey >> VARINT(nIntervalStartRet);
+                nIntervalStartRet += STAKE_MODIFIER_MIN_TIME;
+
+                leveldb::Slice slValue = pcursor->value();
+                CDataStream ssValue(slValue.data(), slValue.data()+slValue.size(), SER_DISK, CLIENT_VERSION);
+                ssValue >> nModifierRet;
+                fResult = true;
+            }
+        } catch (std::exception &e) {
+            return error("%s() : deserialize error", __PRETTY_FUNCTION__);
+        }
+    }
+    delete pcursor;
+
+    return fResult;
+}

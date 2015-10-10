@@ -2229,6 +2229,8 @@ bool SetBestChain(CValidationState &state, CBlockIndex* pindexNew)
             pindex->pprev->pnext = NULL;
             if (!pblocktree->EraseNext(pindex->pprev->GetBlockHash()))
                 return state.Abort(_("Failed to erase next"));
+            if (pindex->GeneratedStakeModifier() && !pblocktree->EraseStakeModifier(pindex->GetBlockTime()))
+                return state.Abort(_("Failed to erase stake modifier"));
         }
 
     // Connect longer branch
@@ -2238,6 +2240,8 @@ bool SetBestChain(CValidationState &state, CBlockIndex* pindexNew)
             pindex->pprev->pnext = pindex;
             if (!pblocktree->WriteNext(pindex->pprev->GetBlockHash(), pindex->GetBlockHash()))
                 return state.Abort(_("Failed to write next"));
+            if (pindex->GeneratedStakeModifier() && !pblocktree->WriteStakeModifier(pindex->GetBlockTime(), pindex->nStakeModifier))
+                return state.Abort(_("Failed to write stake modifier"));
         }
 
     // Resurrect memory transactions that were in the disconnected branch

@@ -56,6 +56,10 @@ public:
     bool WriteNext(const uint256& hashBlock, const uint256& hashNext);
     bool EraseNext(const uint256& hashBlock);
     bool ReadNext(const uint256& hashBlock, uint256& hashNext);
+
+    bool WriteStakeModifier(int64 nIntervalStart, uint64 nModifier);
+    bool EraseStakeModifier(int64 nIntervalStart);
+    bool FindStakeModifierAt(int64 nEnd, int64& nIntervalStartRet, uint64& nModifierRet);
 };
 
 #endif // BITCOIN_TXDB_LEVELDB_H
