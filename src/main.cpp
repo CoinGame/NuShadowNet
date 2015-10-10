@@ -42,7 +42,7 @@ CCriticalSection cs_main;
 CTxMemPool mempool;
 unsigned int nTransactionsUpdated = 0;
 
-map<uint256, CBlockIndex*> mapBlockIndex;
+BlockMap mapBlockIndex;
 set<pair<COutPoint, unsigned int> > setStakeSeen;
 uint256 hashGenesisBlock = hashGenesisBlockOfficial;
 static CBigNum bnProofOfWorkLimit(~uint256(0) >> 20);
@@ -51,13 +51,13 @@ static CBigNum bnInitialProofOfStakeHashTarget(~uint256(0) >> 20);
 unsigned int nStakeMinAge = STAKE_MIN_AGE;
 int nCoinbaseMaturity = COINBASE_MATURITY;
 int nCoinstakeMaturity = COINSTAKE_MATURITY;
-CBlockIndex* pindexGenesisBlock = NULL;
+CLockedBlockIndex pindexGenesisBlock = NULL;
 int nBestHeight = -1;
 uint256 nBestChainTrust = 0;
 uint256 nBestInvalidTrust = 0;
 uint256 hashBestChain = 0;
-CBlockIndex* pindexBest = NULL;
-set<CBlockIndex*, CBlockIndexWorkComparator> setBlockIndexValid; // may contain all CBlockIndex*'s that have validness >=BLOCK_VALID_TRANSACTIONS, and must contain those who aren't failed
+CLockedBlockIndex pindexBest = NULL;
+set<TrustHash, CBlockIndexWorkComparator> setBlockIndexValid; // may contain all CBlockIndex*'s that have validness >=BLOCK_VALID_TRANSACTIONS, and must contain those who aren't failed
 int64 nTimeBestReceived = 0;
 int nScriptCheckThreads = 0;
 bool fImporting = false;
@@ -1444,10 +1444,10 @@ bool ConnectBestBlock(CValidationState &state) {
         CBlockIndex *pindexNewBest;
 
         {
-            std::set<CBlockIndex*,CBlockIndexWorkComparator>::reverse_iterator it = setBlockIndexValid.rbegin();
+            std::set<TrustHash,CBlockIndexWorkComparator>::reverse_iterator it = setBlockIndexValid.rbegin();
             if (it == setBlockIndexValid.rend())
                 return true;
-            pindexNewBest = *it;
+            pindexNewBest = mapBlockIndex[it->hash];
         }
 
         if (pindexNewBest == pindexBest || (pindexBest && pindexNewBest->nChainTrust == pindexBest->nChainTrust))
@@ -2225,12 +2225,24 @@ bool SetBestChain(CValidationState &state, CBlockIndex* pindexNew)
     // Disconnect shorter branch
     BOOST_FOREACH(CBlockIndex* pindex, vDisconnect)
         if (pindex->pprev)
+        {
             pindex->pprev->pnext = NULL;
+            if (!pblocktree->EraseNext(pindex->pprev->GetBlockHash()))
+                return state.Abort(_("Failed to erase next"));
+            if (pindex->GeneratedStakeModifier() && !pblocktree->EraseStakeModifier(pindex->GetBlockTime()))
+                return state.Abort(_("Failed to erase stake modifier"));
+        }
 
     // Connect longer branch
     BOOST_FOREACH(CBlockIndex* pindex, vConnect)
         if (pindex->pprev)
+        {
             pindex->pprev->pnext = pindex;
+            if (!pblocktree->WriteNext(pindex->pprev->GetBlockHash(), pindex->GetBlockHash()))
+                return state.Abort(_("Failed to write next"));
+            if (pindex->GeneratedStakeModifier() && !pblocktree->WriteStakeModifier(pindex->GetBlockTime(), pindex->nStakeModifier))
+                return state.Abort(_("Failed to write stake modifier"));
+        }
 
     // Resurrect memory transactions that were in the disconnected branch
     BOOST_FOREACH(CTransaction& tx, vResurrect) {
@@ -2286,13 +2298,7 @@ bool SetBestChain(CValidationState &state, CBlockIndex* pindexNew)
             strMiscWarning = _("Warning: This version is obsolete, upgrade required!");
     }
 
-    if (!IsSyncCheckpointEnforced()) // checkpoint advisory mode
-    {
-        if (pindexBest->pprev && !CheckSyncCheckpoint(pindexBest->GetBlockHash(), pindexBest->pprev))
-            strCheckpointWarning = _("Warning: checkpoint on different blockchain fork, contact developers to resolve the issue");
-        else
-            strCheckpointWarning = "";
-    }
+    // nubit: removed sync checkpoints
 
     std::string strCmd = GetArg("-blocknotify", "");
 
@@ -3456,82 +3462,7 @@ bool static LoadBlockIndexDB()
     boost::this_thread::interruption_point();
 
     // Calculate nChainTrust
-    vector<pair<int, CBlockIndex*> > vSortedByHeight;
-    vSortedByHeight.reserve(mapBlockIndex.size());
-    BOOST_FOREACH(const PAIRTYPE(uint256, CBlockIndex*)& item, mapBlockIndex)
-    {
-        CBlockIndex* pindex = item.second;
-        vSortedByHeight.push_back(make_pair(pindex->nHeight, pindex));
-    }
-    sort(vSortedByHeight.begin(), vSortedByHeight.end());
-    BOOST_FOREACH(const PAIRTYPE(int, CBlockIndex*)& item, vSortedByHeight)
-    {
-        CBlockIndex* pindex = item.second;
-        pindex->nChainTrust = (pindex->pprev ? pindex->pprev->nChainTrust : 0) + pindex->GetBlockTrust().getuint256();
-        // ppcoin: calculate stake modifier checksum
-        pindex->nStakeModifierChecksum = GetStakeModifierChecksum(pindex);
-        if (!CheckStakeModifierCheckpoints(pindex->nHeight, pindex->nStakeModifierChecksum))
-            return error("LoadBlockIndexDB() : Failed stake modifier checkpoint height=%d, modifier=0x%016"PRI64x, pindex->nHeight, pindex->nStakeModifier);
-
-        pindex->nChainTx = (pindex->pprev ? pindex->pprev->nChainTx : 0) + pindex->nTx;
-        if ((pindex->nStatus & BLOCK_VALID_MASK) >= BLOCK_VALID_TRANSACTIONS && !(pindex->nStatus & BLOCK_FAILED_MASK))
-            setBlockIndexValid.insert(pindex);
-    }
-
-    // nubit: a bug in a previous version serialized blocks with 0 as version
-    BOOST_FOREACH(const PAIRTYPE(uint256, CBlockIndex*)& item, mapBlockIndex)
-    {
-        CBlockIndex* pindex = item.second;
-        if (pindex->vote.nVersionVote == 0 && pindex->IsProofOfStake())
-        {
-            printf("Repairing vote on block %s\n", item.first.GetHex().c_str());
-            CBlock block;
-            if (!block.ReadFromDisk(pindex))
-                return error("unable to read block");
-
-            CVote vote;
-            if (!ExtractVote(block, vote, pindex->nProtocolVersion))
-                return error("unable to extract vote");
-
-            vote.nCoinAgeDestroyed = pindex->vote.nCoinAgeDestroyed;
-            pindex->vote = vote;
-
-            if (!pblocktree->WriteBlockIndex(CDiskBlockIndex(pindex)))
-                return error("Failed to write block index");
-        }
-    }
-
-    // nubit: rebuild list of elected custodians
-    if (pindexGenesisBlock)
-    {
-        for (CBlockIndex* pindex = pindexGenesisBlock->pnext; pindex; pindex = pindex->pnext)
-        {
-            if (pindex->pprev->vElectedCustodian.size())
-                pindex->pprevElected = pindex->pprev;
-            else
-                pindex->pprevElected = pindex->pprev->pprevElected;
-        }
-        // if we have indexed block not in the main chain, we update them too
-        BOOST_FOREACH(PAIRTYPE(const uint256, CBlockIndex*) pair, mapBlockIndex)
-        {
-            CBlockIndex* pindex = pair.second;
-            if (pindex->pnext) // in main chain, already done
-                continue;
-            for (CBlockIndex* pprev = pindex->pprev; pprev; pprev = pprev->pprev)
-            {
-                if (pprev->pprevElected)
-                {
-                    pindex->pprevElected = pprev->pprevElected;
-                    break;
-                }
-                if (pprev->vElectedCustodian.size())
-                {
-                    pindex->pprevElected = pprev;
-                    break;
-                }
-            }
-        }
-    }
+    // nubit: nChainTrust and other fields are stored in the block index database to avoid calculating them at startup
 
     // Load block file info
     pblocktree->ReadLastBlockFile(nLastBlockFile);
@@ -3570,12 +3501,8 @@ bool static LoadBlockIndexDB()
     nBestChainTrust = pindexBest->nChainTrust;
 
     // set 'next' pointers in best chain
-    CBlockIndex *pindex = pindexBest;
-    while(pindex != NULL && pindex->pprev != NULL) {
-         CBlockIndex *pindexPrev = pindex->pprev;
-         pindexPrev->pnext = pindex;
-         pindex = pindexPrev;
-    }
+    // nubit: removed because the next pointer is set when the CDiskBlockIndex is loaded
+
     printf("LoadBlockIndexDB(): hashBestChain=%s  height=%d date=%s\n",
         hashBestChain.ToString().c_str(), nBestHeight,
         DateTimeStrFormat("%Y-%m-%d %H:%M:%S", pindexBest->GetBlockTime()).c_str());
@@ -3836,11 +3763,13 @@ bool InitBlockIndex() {
 void PrintBlockTree()
 {
     // pre-compute tree structure
-    map<CBlockIndex*, vector<CBlockIndex*> > mapNext;
-    for (map<uint256, CBlockIndex*>::iterator mi = mapBlockIndex.begin(); mi != mapBlockIndex.end(); ++mi)
+    map<uint256, vector<CLazyBlockIndex> > mapNext;
+    for (set<uint256>::iterator mi = mapBlockIndex.known_begin(); mi != mapBlockIndex.known_end(); ++mi)
     {
-        CBlockIndex* pindex = (*mi).second;
-        mapNext[pindex->pprev].push_back(pindex);
+        const uint256& hash = *mi;
+        const uint256* pprev = mapBlockIndex.prev(hash);
+        if (pprev)
+            mapNext[*pprev].push_back(CLazyBlockIndex(hash));
         // test
         //while (rand() % 3 == 0)
         //    mapNext[pindex->pprev].push_back(pindex);
@@ -3890,7 +3819,7 @@ void PrintBlockTree()
         PrintWallets(block);
 
         // put the main time-chain first
-        vector<CBlockIndex*>& vNext = mapNext[pindex];
+        vector<CLazyBlockIndex>& vNext = mapNext[pindex->GetBlockHash()];
         for (unsigned int i = 0; i < vNext.size(); i++)
         {
             if (vNext[i]->pnext)
@@ -3903,6 +3832,8 @@ void PrintBlockTree()
         // iterate children
         for (unsigned int i = 0; i < vNext.size(); i++)
             vStack.push_back(make_pair(nCol+i, vNext[i]));
+
+        mapBlockIndex.unload(pindex);
     }
 }
 
@@ -3962,6 +3893,9 @@ bool LoadExternalBlockFile(FILE* fileIn, CDiskBlockPos *dbp)
                     CValidationState state;
                     if (ProcessBlock(state, NULL, &block, dbp))
                         nLoaded++;
+                    // nubit: cleanup the loaded block indexes
+                    if (nLoaded % 100 == 0)
+                        mapBlockIndex.cleanup();
                     if (state.IsError())
                         break;
                 }
@@ -4702,6 +4636,9 @@ bool static ProcessMessage(CNode* pfrom, string strCommand, CDataStream& vRecv)
             if (nDoS > 0)
                 pfrom->Misbehaving(nDoS);
         }
+
+        // nubit: remove some block indexes from memory
+        mapBlockIndex.cleanup();
     }
 
 
@@ -5385,7 +5322,7 @@ CBlockTemplate* CreateNewBlock(CReserveKey& reservekey, CWallet* pwallet, bool f
 
     // ppcoin: if coinstake available add coinstake tx
     static int64 nLastCoinStakeSearchTime = GetAdjustedTime();  // only initialized at startup
-    CBlockIndex* pindexPrev = pindexBest;
+    CLockedBlockIndex pindexPrev = pindexBest;
 
     if (fProofOfStake)  // attemp to find a coinstake
     {
@@ -5407,6 +5344,9 @@ CBlockTemplate* CreateNewBlock(CReserveKey& reservekey, CWallet* pwallet, bool f
             nLastCoinStakeSearchInterval = nSearchTime - nLastCoinStakeSearchTime;
             nLastCoinStakeSearchTime = nSearchTime;
         }
+        // nubit: no kernel found, do not bother creating the block
+        if (!pblock->IsProofOfStake())
+            return NULL;
     }
 
     pblock->nBits = GetNextTargetRequired(pindexPrev, pblock->IsProofOfStake());
@@ -5847,7 +5787,10 @@ void BitcoinMiner(CWallet *pwallet, bool fProofOfStake)
 
         auto_ptr<CBlockTemplate> pblocktemplate(CreateNewBlock(reservekey, pwallet, fProofOfStake));
         if (!pblocktemplate.get())
-            return;
+        {
+            MilliSleep(500);
+            continue;
+        }
         CBlock *pblock = &pblocktemplate->block;
         IncrementExtraNonce(pblock, pindexPrev, nExtraNonce);
 
@@ -6147,9 +6090,7 @@ public:
     CMainCleanup() {}
     ~CMainCleanup() {
         // block headers
-        std::map<uint256, CBlockIndex*>::iterator it1 = mapBlockIndex.begin();
-        for (; it1 != mapBlockIndex.end(); it1++)
-            delete (*it1).second;
+        // nubit: BlockMap does all the block index cleanup
         mapBlockIndex.clear();
 
         // orphan blocks

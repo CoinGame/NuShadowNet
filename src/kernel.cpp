@@ -137,6 +137,7 @@ static bool SelectBlockFromCandidates(
 // blocks.
 bool ComputeNextStakeModifier(const CBlockIndex* pindexCurrent, uint64& nStakeModifier, bool& fGeneratedStakeModifier)
 {
+    LOCK(mapBlockIndex.cs_cleanup);
     const CBlockIndex* pindexPrev = pindexCurrent->pprev;
     nStakeModifier = 0;
     fGeneratedStakeModifier = false;
@@ -263,13 +264,17 @@ static bool GetKernelStakeModifier(uint256 hashBlockFrom, uint64& nStakeModifier
 
     // nu: initial blocks do not use modifiers in the future because there may not be enough blocks at network start
     if (nStakeModifierHeight <= PROOF_OF_WORK_BLOCKS)
-        nStakeModifierSelectionInterval = 0;
+    {
+        nStakeModifier = pindexFrom->nStakeModifier;
+        nStakeModifierHeight = pindexFrom->nHeight;
+        nStakeModifierTime = pindexFrom->GetBlockTime();
+        return true;
+    }
 
     const CBlockIndex* pindex = pindexFrom;
-    // loop to find the stake modifier later by a selection interval
-    while (nStakeModifierTime < pindexFrom->GetBlockTime() + nStakeModifierSelectionInterval)
+    // nubit: get stake modifier from database to avoid scanning the blockchain
     {
-        if (!pindex->pnext)
+        if (!pblocktree->FindStakeModifierAt(pindexFrom->GetBlockTime() + nStakeModifierSelectionInterval, nStakeModifierTime, nStakeModifier))
         {   // reached best block; may happen if node is behind on block chain
             if (fPrintProofOfStake || (pindex->GetBlockTime() + nStakeMinAge - nStakeModifierSelectionInterval > GetAdjustedTime()))
                 return error("GetKernelStakeModifier() : reached best block %s at height %d from block %s",
@@ -277,19 +282,12 @@ static bool GetKernelStakeModifier(uint256 hashBlockFrom, uint64& nStakeModifier
             else
                 return false;
         }
-        pindex = pindex->pnext;
-        if (pindex->GeneratedStakeModifier())
-        {
-            nStakeModifierHeight = pindex->nHeight;
-            nStakeModifierTime = pindex->GetBlockTime();
-        }
+        return true;
     }
-    nStakeModifier = pindex->nStakeModifier;
-    return true;
 }
 
 // Stake modifier cache
-static map<const uint256, uint64> mapStakeModifier;
+static map<const uint256, uint64> mapStakeModifierCache;
 static map<const uint256, int64> mapStakeModifierLastUse;
 
 void CleanStakeModifierCache()
@@ -303,7 +301,7 @@ void CleanStakeModifierCache()
 
         if (nNow > nLastUse + 24 * 60 * 60)
         {
-            mapStakeModifier.erase(hash);
+            mapStakeModifierCache.erase(hash);
             mapStakeModifierLastUse.erase(it++);
         }
         else
@@ -313,7 +311,7 @@ void CleanStakeModifierCache()
 
 void ClearStakeModifierCache()
 {
-    mapStakeModifier.clear();
+    mapStakeModifierCache.clear();
     mapStakeModifierLastUse.clear();
 }
 
@@ -370,13 +368,13 @@ bool CheckStakeKernelHash(unsigned int nBits, const CBlockHeader& blockFrom, uns
     if (IsProtocolV03(nTimeTx))  // v0.3 protocol
     {
         const uint256 hashBlockFrom = blockFrom.GetHash();
-        map<const uint256, uint64>::const_iterator it = mapStakeModifier.find(hashBlockFrom);
-        if (it == mapStakeModifier.end())
+        map<const uint256, uint64>::const_iterator it = mapStakeModifierCache.find(hashBlockFrom);
+        if (it == mapStakeModifierCache.end())
         {
             if (!GetKernelStakeModifier(blockFrom.GetHash(), nStakeModifier, nStakeModifierHeight, nStakeModifierTime, fPrintProofOfStake))
                 return false;
             pair<const uint256, uint64> value(hashBlockFrom, nStakeModifier);
-            it = mapStakeModifier.insert(value).first;
+            it = mapStakeModifierCache.insert(value).first;
         }
         nStakeModifier = it->second;
         ss << nStakeModifier;

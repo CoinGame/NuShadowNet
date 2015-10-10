@@ -255,7 +255,8 @@ HEADERS += src/qt/bitcoingui.h \
     src/liquidityinfo.h \
     src/datafeed.h \
     src/qt/datafeeddialog.h \
-    src/qt/feevotedialog.h
+    src/qt/feevotedialog.h \
+    src/qt/blockmap.h
 
 SOURCES += src/qt/bitcoin.cpp \
     src/qt/bitcoingui.cpp \
@@ -346,7 +347,8 @@ SOURCES += src/qt/bitcoin.cpp \
     src/rpcdividend.cpp \
     src/rpcliquidity.cpp \
     src/rpcpark.cpp \
-    src/rpcvote.cpp
+    src/rpcvote.cpp \
+    src/blockmap.cpp
 
 RESOURCES += src/qt/bitcoin.qrc
 

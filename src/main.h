@@ -13,6 +13,7 @@
 #include "net.h"
 #include "script.h"
 #include "vote.h"
+#include "blockmap.h"
 
 #include <list>
 
@@ -30,6 +31,8 @@ class CNode;
 class CCoinControl;
 
 struct CBlockIndexWorkComparator;
+
+struct TrustHash;
 
 /** The maximum allowed size for a serialized block, in bytes (network rule) */
 static const unsigned int MAX_BLOCK_SIZE = 1000000;
@@ -140,19 +143,19 @@ inline int64 GetDefaultFee(unsigned char cUnit)
 
 
 extern CCriticalSection cs_main;
-extern std::map<uint256, CBlockIndex*> mapBlockIndex;
+extern BlockMap mapBlockIndex;
 extern std::set<std::pair<COutPoint, unsigned int> > setStakeSeen;
-extern std::set<CBlockIndex*, CBlockIndexWorkComparator> setBlockIndexValid;
+extern std::set<TrustHash, CBlockIndexWorkComparator> setBlockIndexValid;
 extern uint256 hashGenesisBlock;
 extern unsigned int nStakeMinAge;
 extern int nCoinbaseMaturity;
 extern int nCoinstakeMaturity;
-extern CBlockIndex* pindexGenesisBlock;
+extern CLockedBlockIndex pindexGenesisBlock;
 extern int nBestHeight;
 extern uint256 nBestChainTrust;
 extern uint256 nBestInvalidTrust;
 extern uint256 hashBestChain;
-extern CBlockIndex* pindexBest;
+extern CLockedBlockIndex pindexBest;
 extern unsigned int nTransactionsUpdated;
 extern uint64 nLastBlockTx;
 extern uint64 nLastBlockSize;
@@ -1912,10 +1915,10 @@ public:
     const uint256* phashBlock;
 
     // pointer to the index of the predecessor of this block
-    CBlockIndex* pprev;
+    CLazyBlockIndex pprev;
 
     // (memory only) pointer to the index of the *active* successor of this block
-    CBlockIndex* pnext;
+    CLazyBlockIndex pnext;
 
     // height of the entry in the chain. The genesis block has height 0
     int nHeight;
@@ -1930,6 +1933,7 @@ public:
     unsigned int nUndoPos;
 
     // (memory only) Total amount of trust score (ppcoin proof-of-stake difficulty) in the chain up to and including this block
+    // nubit: also serialized
     uint256 nChainTrust;
 
     // Number of transactions in this block.
@@ -1937,6 +1941,7 @@ public:
     unsigned int nTx;
 
     // (memory only) Number of transactions in the chain up to and including this block
+    // nubit: also serialized
     unsigned int nChainTx; // change to 64-bit type when necessary; won't happen before 2030
 
     // Verification status of this block. See enum BlockStatus
@@ -1976,7 +1981,10 @@ public:
     std::map<unsigned char, uint32_t> mapVotedFee;
 
     // nubit: previous block with an elected custodian
-    CBlockIndex* pprevElected;
+    CLazyBlockIndex pprevElected;
+
+    // nubit: number of locks preventing this block index from being unloaded
+    mutable int nLocks;
 
     // block header
     int nVersion;
@@ -2015,6 +2023,7 @@ public:
         nProtocolVersion = 0;
         mapVotedFee.clear();
         pprevElected = NULL;
+        nLocks = 0;
 
         nVersion       = 0;
         hashMerkleRoot = 0;
@@ -2061,6 +2070,7 @@ public:
         nProtocolVersion = 0;
         mapVotedFee.clear();
         pprevElected = NULL;
+        nLocks = 0;
 
         nVersion       = block.nVersion;
         hashMerkleRoot = block.hashMerkleRoot;
@@ -2275,7 +2285,7 @@ public:
     std::string ToString() const
     {
         return strprintf("CBlockIndex(pprev=%p, pnext=%p, nHeight=%d, nMint=%s, nMoneySupply(S)=%s, nMoneySupply(B)=%s, nFlags=(%s)(%d)(%s), nStakeModifier=%016"PRI64x", nStakeModifierChecksum=%08x, hashProofOfStake=%s, prevoutStake=(%s), nStakeTime=%d merkle=%s, hashBlock=%s)",
-            pprev, pnext, nHeight,
+            (void*)pprev, (void*)pnext, nHeight,
             FormatMoney(nMint).c_str(),
             FormatMoney(GetMoneySupply('S')).c_str(),
             FormatMoney(GetMoneySupply('B')).c_str(),
@@ -2293,9 +2303,31 @@ public:
     }
 };
 
+struct TrustHash
+{
+    uint256 nChainTrust;
+    uint256 hash;
+
+    TrustHash(const CBlockIndex* pindex) :
+        nChainTrust(pindex->nChainTrust),
+        hash(pindex->GetBlockHash())
+    {
+    }
+
+    const uint256& GetBlockHash() const
+    {
+        return hash;
+    }
+
+    const TrustHash* operator->() const
+    {
+        return this;
+    }
+};
+
 struct CBlockIndexWorkComparator
 {
-    bool operator()(CBlockIndex *pa, CBlockIndex *pb) {
+    bool operator()(const TrustHash& pa, const TrustHash& pb) {
         if (pa->nChainTrust > pb->nChainTrust) return false;
         if (pa->nChainTrust < pb->nChainTrust) return true;
 
@@ -2314,12 +2346,18 @@ class CDiskBlockIndex : public CBlockIndex
 public:
     uint256 hashPrev;
 
+    // nubit: hash of the nearest parent block that elected custodians
+    // Saved on disk because we do not set it at startup
+    uint256 hashPrevElected;
+
     CDiskBlockIndex() {
         hashPrev = 0;
+        hashPrevElected = 0;
     }
 
     explicit CDiskBlockIndex(CBlockIndex* pindex) : CBlockIndex(*pindex) {
         hashPrev = (pprev ? pprev->GetBlockHash() : 0);
+        hashPrevElected = (pprevElected ? pprevElected->GetBlockHash() : 0);
     }
 
     IMPLEMENT_SERIALIZE
@@ -2385,6 +2423,15 @@ public:
             const_cast<CDiskBlockIndex*>(this)->nCoinAgeDestroyed = 0;
             const_cast<CDiskBlockIndex*>(this)->vElectedCustodian.clear();
             const_cast<CDiskBlockIndex*>(this)->mapVotedFee.clear();
+        }
+
+        // nubit: also serialize values that were only kept in memory to avoid calculating them on boot
+        if (nVersion >= 2010000)
+        {
+            READWRITE(nChainTrust);
+            READWRITE(nChainTx);
+            READWRITE(nStakeModifierChecksum);
+            READWRITE(hashPrevElected);
         }
 
         // block header
@@ -2535,13 +2582,14 @@ public:
     {
         vHave.clear();
         int nStep = 1;
-        while (pindex)
+        const uint256* phash = pindex->phashBlock;
+        while (phash)
         {
-            vHave.push_back(pindex->GetBlockHash());
+            vHave.push_back(*phash);
 
             // Exponentially larger steps back
-            for (int i = 0; pindex && i < nStep; i++)
-                pindex = pindex->pprev;
+            for (int i = 0; phash && i < nStep; i++)
+                phash = mapBlockIndex.prev(*phash);
             if (vHave.size() > 10)
                 nStep *= 2;
         }

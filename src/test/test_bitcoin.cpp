@@ -30,6 +30,7 @@ struct TestingSetup {
         boost::filesystem::create_directories(pathTemp);
         mapArgs["-datadir"] = pathTemp.string();
         pblocktree = new CBlockTreeDB(1 << 20, true);
+        mapBlockIndex.pblocktree = pblocktree;
         pcoinsdbview = new CCoinsViewDB(1 << 23, true);
         pcoinsTip = new CCoinsViewCache(*pcoinsdbview);
         InitBlockIndex();

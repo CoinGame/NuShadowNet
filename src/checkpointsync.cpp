@@ -151,7 +151,8 @@ bool WriteSyncCheckpoint(const uint256& hashCheckpoint)
 
 bool IsSyncCheckpointEnforced()
 {
-    return (GetBoolArg("-checkpointenforce", true) || mapArgs.count("-checkpointkey")); // checkpoint master node is always enforced
+    // nubit: sync checkpoints are always disabled (otherwise the whole block index is scanned to find the last one received)
+    return false;
 }
 
 bool AcceptPendingSyncCheckpoint()

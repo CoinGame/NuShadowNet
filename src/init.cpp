@@ -865,6 +865,9 @@ bool AppInit2(boost::thread_group& threadGroup)
                 pcoinsdbview = new CCoinsViewDB(nCoinDBCache, false, fReindex);
                 pcoinsTip = new CCoinsViewCache(*pcoinsdbview);
 
+                // nubit: set the block database on the BlockMap
+                mapBlockIndex.pblocktree = pblocktree;
+
                 if (fReindex)
                     pblocktree->WriteReindexing(true);
 
@@ -933,18 +936,19 @@ bool AppInit2(boost::thread_group& threadGroup)
     {
         string strMatch = mapArgs["-printblock"];
         int nFound = 0;
-        for (map<uint256, CBlockIndex*>::iterator mi = mapBlockIndex.begin(); mi != mapBlockIndex.end(); ++mi)
+        for (set<uint256>::iterator mi = mapBlockIndex.known_begin(); mi != mapBlockIndex.known_end(); ++mi)
         {
-            uint256 hash = (*mi).first;
+            uint256 hash = (*mi);
             if (strncmp(hash.ToString().c_str(), strMatch.c_str(), strMatch.size()) == 0)
             {
-                CBlockIndex* pindex = (*mi).second;
+                CBlockIndex* pindex = mapBlockIndex[hash];
                 CBlock block;
                 block.ReadFromDisk(pindex);
                 block.BuildMerkleTree();
                 block.print();
                 printf("\n");
                 nFound++;
+                mapBlockIndex.cleanup();
             }
         }
         if (nFound == 0)
