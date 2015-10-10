@@ -5,6 +5,7 @@
 
 #include "main.h"
 #include "bitcoinrpc.h"
+#include <boost/lexical_cast.hpp>
 
 using namespace json_spirit;
 using namespace std;
@@ -346,4 +347,52 @@ Value gettxout(const Array& params, bool fHelp)
     return ret;
 }
 
+CBlockIndex *getOptionalBlockHeight(const Array& params, const int blockHeightIndex)
+{
+    CBlockIndex *pindex = pindexBest;
+    if (params.size() > 0)
+    {
+        int nHeight = params[0].get_int();
 
+        if (nHeight < 0 || nHeight > nBestHeight)
+            throw runtime_error("Invalid height\n");
+
+        for (int i = nBestHeight; i > nHeight; i--)
+            pindex = pindex->pprev;
+    }
+    return pindex;
+}
+
+
+Value getprotocolinfo(const Array& params, bool fHelp)
+{
+    if (fHelp || params.size() > 1)
+        throw runtime_error(
+            "getprotocolinfo [<block height>]\n"
+            "Returns an object containing the current active protocol and votes.");
+
+    Object obj;
+
+    CBlockIndex *pindex = getOptionalBlockHeight(params, 0);
+
+    obj.push_back(Pair("version",       pindex->nProtocolVersion));
+    obj.push_back(Pair("max_version",    PROTOCOL_VERSION));
+    obj.push_back(Pair("switch_percent", (double)PROTOCOL_SWITCH_REQUIRE_VOTES/PROTOCOL_SWITCH_COUNT_VOTES*100));
+
+    map<int, int> mapProtocolVotes;
+    for (int i = 0; i < PROTOCOL_SWITCH_COUNT_VOTES && pindex; i++, pindex = pindex->pprev)
+        mapProtocolVotes[pindex->vote.nVersionVote]++;
+
+    Object protocolVotesObject;
+    BOOST_FOREACH(const PAIRTYPE(int, int)& protocolVote, mapProtocolVotes)
+    {
+        string version = boost::lexical_cast<std::string>(protocolVote.first);
+        Object voteDetails;
+        voteDetails.push_back(Pair("votes", protocolVote.second));
+        voteDetails.push_back(Pair("percentage", (double)protocolVote.second/PROTOCOL_SWITCH_COUNT_VOTES*100));
+        protocolVotesObject.push_back(Pair(version, voteDetails));
+    }
+    obj.push_back(Pair("protocol_votes", protocolVotesObject));
+
+    return obj;
+}

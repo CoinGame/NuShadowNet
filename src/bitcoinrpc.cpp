@@ -283,8 +283,6 @@ string CRPCTable::help(string strCommand) const
     }
     if (strRet == "")
         strRet = strprintf("help: unknown command: %s\n", strCommand.c_str());
-    strRet = strRet.substr(0,strRet.size()-1);
-    return strRet;
 }
 
 Value help(const Array& params, bool fHelp)
@@ -336,6 +334,7 @@ static const CRPCCommand vRPCCommands[] =
     { "gethashespersec",        &gethashespersec,        true,      false },
     { "getnetworkghps",         &getnetworkghps,         true,      false },
     { "getinfo",                &getinfo,                true,      false },
+    { "getprotocolinfo",        &getprotocolinfo,        true,      false },
     { "getmininginfo",          &getmininginfo,          true,      false },
     { "getnewaddress",          &getnewaddress,          true,      false },
     { "getaccountaddress",      &getaccountaddress,      true,      false },
@@ -1486,6 +1485,7 @@ Array RPCConvertValues(const std::string &strMethod, const std::vector<std::stri
     if (strMethod == "distribute"             && n > 1) ConvertTo<double>(params[1]);
     if (strMethod == "distribute"             && n > 2) ConvertTo<bool>(params[2]);
     if (strMethod == "setvote"                && n > 0) ConvertTo<Object>(params[0]);
+    if (strMethod == "getprotocolinfo"         && n > 0) ConvertTo<boost::int64_t>(params[0]);
     if (strMethod == "liquidityinfo"          && n > 1) ConvertTo<double>(params[1]);
     if (strMethod == "liquidityinfo"          && n > 2) ConvertTo<double>(params[2]);
     if (strMethod == "getmotions"             && n > 0) ConvertTo<boost::int64_t>(params[0]);
