@@ -283,6 +283,8 @@ string CRPCTable::help(string strCommand) const
     }
     if (strRet == "")
         strRet = strprintf("help: unknown command: %s\n", strCommand.c_str());
+    strRet = strRet.substr(0,strRet.size()-1);
+    return strRet;
 }
 
 Value help(const Array& params, bool fHelp)
