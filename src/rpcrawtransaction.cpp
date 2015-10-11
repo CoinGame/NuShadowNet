@@ -594,3 +594,36 @@ Value sendrawtransaction(const Array& params, bool fHelp)
 
     return hashTx.GetHex();
 }
+
+Value getfee(const Array& params, bool fHelp)
+{
+    if (fHelp || params.size() < 2 || params.size() > 3)
+        throw runtime_error(
+            "getfee <size> <amount> [<unit>]\n"
+            "Returns the fee that must be included in a transaction of <size> bytes in unit <unit> that sends <amount>.\n"
+            "By default <unit> is the current wallet's unit.");
+
+    unsigned char cUnit = '?';
+    if (params.size() > 2)
+    {
+        string strUnit = params[2].get_str();
+        if (strUnit.size() == 1)
+            cUnit = strUnit[0];
+    }
+    else
+        cUnit = pwalletMain->GetUnit();
+
+    if (!IsValidUnit(cUnit))
+        throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid unit");
+
+    int nSize = params[0].get_int();
+
+    if (nSize < 0 || nSize > (int)MAX_BLOCK_SIZE)
+        throw JSONRPCError(RPC_INVALID_PARAMETER, "Invalid size");
+
+    CTransaction tx;
+    tx.cUnit = cUnit;
+    int64 nFee = tx.GetSafeMinFee(pindexBest, nSize);
+
+    return FormatMoney(nFee);
+}
