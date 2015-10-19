@@ -455,10 +455,6 @@ bool CheckProofOfStake(CValidationState &state, const CTransaction& tx, unsigned
     if (!view.GetCoins(txin.prevout.hash, coins))
         return state.DoS(1, error("CheckProofOfStake() : txPrev not found")); // previous transaction not in main chain, may occur during initial download
 
-    // nu: the kernel must have the minimum amount
-    if (coins.vout[txin.prevout.n].nValue < MIN_COINSTAKE_VALUE)
-        return state.DoS(100, error("CheckProofOfStake() : Input value too low on coinstake %s", tx.GetHash().ToString().c_str()));
-
     // Verify signature
     if (!VerifySignature(coins, tx, 0, true, 0))
         return state.DoS(100, error("CheckProofOfStake() : VerifySignature failed on coinstake %s", tx.GetHash().ToString().c_str()));
@@ -483,6 +479,11 @@ bool CheckProofOfStake(CValidationState &state, const CTransaction& tx, unsigned
         if (txPrev.GetHash() != txin.prevout.hash)
             return error("%s() : txid mismatch in CheckProofOfStake()", __PRETTY_FUNCTION__);
     }
+
+    // nu: the kernel must have the minimum amount
+    // We cannot use `coins` here because the coins may have been spent if the CoinStake is in a fork of the main chain
+    if (txPrev.vout[txin.prevout.n].nValue < MIN_COINSTAKE_VALUE)
+        return state.DoS(100, error("CheckProofOfStake() : Input value too low on coinstake %s: %"PRI64d, tx.GetHash().ToString().c_str(), coins.vout[txin.prevout.n].nValue));
 
     if (!CheckStakeKernelHash(nBits, header, postx.nTxOffset + sizeof(CBlockHeader), txPrev, txin.prevout, tx.nTime, hashProofOfStake, fDebug))
         return state.DoS(1, error("CheckProofOfStake() : INFO: check kernel failed on coinstake %s, hashProof=%s", tx.GetHash().ToString().c_str(), hashProofOfStake.ToString().c_str())); // may occur during initial download or if behind on block chain sync
