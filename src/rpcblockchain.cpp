@@ -380,7 +380,7 @@ Value getprotocolinfo(const Array& params, bool fHelp)
     obj.push_back(Pair("switch_percent", (double)PROTOCOL_SWITCH_REQUIRE_VOTES/PROTOCOL_SWITCH_COUNT_VOTES*100));
 
     map<int, int> mapProtocolVotes;
-    for (int i = 0; i < PROTOCOL_SWITCH_COUNT_VOTES && pindex; i++, pindex = pindex->pprev)
+    for (unsigned int i = 0; i < PROTOCOL_SWITCH_COUNT_VOTES && pindex; i++, pindex = pindex->pprev)
         mapProtocolVotes[pindex->vote.nVersionVote]++;
 
     Object protocolVotesObject;
