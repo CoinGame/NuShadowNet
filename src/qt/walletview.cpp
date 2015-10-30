@@ -21,6 +21,7 @@
 #include "parkpage.h"
 #include "votepage.h"
 #include "bitcoinunits.h"
+#include "rpcconsole.h"
 
 #include <QHBoxLayout>
 #include <QVBoxLayout>
@@ -152,6 +153,8 @@ void WalletView::setWalletModel(WalletModel *walletModel)
         gui->getParkAction()->setVisible(walletModel->getUnit() != 'S');
 
         gui->getVoteAction()->setVisible(walletModel->getUnit() == 'S');
+
+        gui->getRPCConsole()->setModel(walletModel);
 
         if (walletModel->getUnit() != 'S' && currentWidget() == votePage)
             gotoOverviewPage();

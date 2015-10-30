@@ -79,6 +79,7 @@ public:
     QMenu * getSharesMenu() { return sharesMenu; }
     QMenu * getUnitMenu() { return unitMenu; }
     void setSwitchUnitTarget(QString unit) { switchUnitTarget = unit; }
+    RPCConsole *getRPCConsole() { return rpcConsole; }
 
 protected:
     void changeEvent(QEvent *e);
