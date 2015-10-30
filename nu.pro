@@ -256,7 +256,7 @@ HEADERS += src/qt/bitcoingui.h \
     src/datafeed.h \
     src/qt/datafeeddialog.h \
     src/qt/feevotedialog.h \
-    src/qt/blockmap.h
+    src/blockmap.h
 
 SOURCES += src/qt/bitcoin.cpp \
     src/qt/bitcoingui.cpp \
