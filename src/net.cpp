@@ -1279,7 +1279,7 @@ void ThreadDNSAddressSeed()
 #define IP_ADDRESS(A, B, C, D) ((UNSIGNED(D) << 24) | (UNSIGNED(C) << 16) | (UNSIGNED(B) << 8) | UNSIGNED(A))
 
 // Physical IP seeds: 32-bit IPv4 addresses: e.g. 178.33.22.32 = 0x201621b2
-unsigned int pnSeed[] =
+unsigned int pnSeedMainNet[] =
 {
     IP_ADDRESS(104, 156, 247, 229),
     IP_ADDRESS(104, 238, 165,  61),
@@ -1291,6 +1291,12 @@ unsigned int pnSeed[] =
     IP_ADDRESS(119,   9, 104, 119),
     IP_ADDRESS(176,   9,  65,  41),
     IP_ADDRESS(176,   9, 113,  75),
+};
+
+unsigned int pnSeedTestNet[] =
+{
+    IP_ADDRESS(104, 238, 146, 223),
+    IP_ADDRESS( 62, 210,  25,   6),
 };
 
 void DumpAddresses()
@@ -1356,10 +1362,22 @@ void ThreadOpenConnections()
 
         // Add seed nodes if IRC isn't working
         // nubit: do not wait 60s because IRC is disabled
-        if (addrman.size()==0 && (GetTime() - nStart > 0) && !fTestNet)
+        if (addrman.size()==0 && (GetTime() - nStart > 0))
         {
+            unsigned int* pnSeed;
+            size_t nSeedCount;
+            if (fTestNet)
+            {
+                pnSeed = pnSeedMainNet;
+                nSeedCount = ARRAYLEN(pnSeedMainNet);
+            }
+            else
+            {
+                pnSeed = pnSeedTestNet;
+                nSeedCount = ARRAYLEN(pnSeedTestNet);
+            }
             std::vector<CAddress> vAdd;
-            for (unsigned int i = 0; i < ARRAYLEN(pnSeed); i++)
+            for (unsigned int i = 0; i < nSeedCount; i++)
             {
                 // It'll only connect to one or two seed nodes because once it connects,
                 // it'll get a pile of addresses with newer timestamps.
