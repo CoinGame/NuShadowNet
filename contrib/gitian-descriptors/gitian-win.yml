@@ -71,7 +71,7 @@ script: |
     cp -f release/nu.exe $BINDIR/
 
     cd src
-    make -f makefile.linux-mingw $MAKEOPTS HOST=$HOST CXX=$HOST-g++ DEPSDIR=$STAGING nud.exe USE_UPNP=1 DEBUGFLAGS="-frandom-seed=nu"
+    make -f makefile.linux-mingw $MAKEOPTS HOST=$HOST CXX=$HOST-g++ DEPSDIR=$STAGING nud.exe USE_UPNP=0 DEBUGFLAGS="-frandom-seed=nu"
     ${HOST}-strip nud.exe
     cp -f nud.exe $BINDIR/
 
