@@ -1274,20 +1274,23 @@ void ThreadDNSAddressSeed()
 
 
 
+// Copied from neucoin:
+#define UNSIGNED(N) static_cast<unsigned>(N)
+#define IP_ADDRESS(A, B, C, D) ((UNSIGNED(D) << 24) | (UNSIGNED(C) << 16) | (UNSIGNED(B) << 8) | UNSIGNED(A))
 
 // Physical IP seeds: 32-bit IPv4 addresses: e.g. 178.33.22.32 = 0x201621b2
 unsigned int pnSeed[] =
 {
-    0x4bc734c6,
-    0x2ec734c6,
-    0x92c8edc0,
-    0x781381d4,
-    0x7f60c780,
-    0x5edfe2bc,
-    0x6be4ef68,
-    0x77680977,
-    0x294109b0,
-    0x4b7109b0,
+    IP_ADDRESS(198,  52, 199,  75),
+    IP_ADDRESS(198,  52, 199,  46),
+    IP_ADDRESS(192, 237, 200, 146),
+    IP_ADDRESS(212, 129,  19, 120),
+    IP_ADDRESS(128, 199,  96, 127),
+    IP_ADDRESS(188, 226, 223,  94),
+    IP_ADDRESS(104, 239, 228, 107),
+    IP_ADDRESS(119,   9, 104, 119),
+    IP_ADDRESS(176,   9,  65,  41),
+    IP_ADDRESS(176,   9, 113,  75),
 };
 
 void DumpAddresses()
