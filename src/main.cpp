@@ -5765,7 +5765,7 @@ void BitcoinMiner(CWallet *pwallet, bool fProofOfStake)
     CDefaultKey reservekey(pwallet);
     unsigned int nExtraNonce = 0;
 
-    string strMintMessage = _("Info: Minting suspended due to locked wallet."); 
+    string strMintMessage = _("Info: Minting suspended due to locked NuShares wallet.");
 
     try { loop {
         while (vNodes.empty())
