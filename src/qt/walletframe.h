@@ -82,6 +82,8 @@ public slots:
     void gotoVotePage();
     /** Export the keys to peercoin */
     void exportPeercoinKeys();
+
+    void unlockForMinting(bool status);
 };
 
 #endif // WALLETFRAME_H

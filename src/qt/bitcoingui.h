@@ -231,6 +231,8 @@ private slots:
     void changeUnit(const QString &unit);
     /** Switch wallet units button**/
     void switchUnitButtonClicked();
+
+    void unlockForMinting(bool status);
 };
 
 #endif // BITCOINGUI_H

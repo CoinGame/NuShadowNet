@@ -160,3 +160,8 @@ void WalletFrame::gotoParkPage()
 {
     walletStack->gotoParkPage();
 }
+
+void WalletFrame::unlockForMinting(bool status)
+{
+    walletStack->unlockForMinting(status);
+}

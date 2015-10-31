@@ -201,3 +201,10 @@ void WalletStack::gotoParkPage()
     for (i = mapWalletViews.constBegin(); i != mapWalletViews.constEnd(); ++i)
         i.value()->gotoParkPage();
 }
+
+void WalletStack::unlockForMinting(bool status)
+{
+    QMap<QString, WalletView*>::const_iterator i;
+    for (i = mapWalletViews.constBegin(); i != mapWalletViews.constEnd(); ++i)
+        i.value()->unlockForMinting(status);
+}

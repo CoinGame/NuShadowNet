@@ -275,6 +275,7 @@ void BitcoinGUI::createActions()
 
     unlockForMintingAction = new QAction(QIcon(":/icons/lock_closed"), tr("&Unlock Wallet for Minting Only"), this);
     unlockForMintingAction->setToolTip(tr("Unlock wallet only for minting. Sending NuShares will still require the passphrase."));
+    unlockForMintingAction->setCheckable(true);
 
     openRPCConsoleAction = new QAction(QIcon(":/icons/debugwindow"), tr("&Debug window"), this);
     openRPCConsoleAction->setStatusTip(tr("Open debugging and diagnostic console"));
@@ -298,6 +299,7 @@ void BitcoinGUI::createActions()
     connect(exportPeercoinKeysAction, SIGNAL(triggered()), walletFrame, SLOT(exportPeercoinKeys()));
     connect(distributeDividendsAction, SIGNAL(triggered()), this, SLOT(distributeDividendsClicked()));
     connect(switchUnitAction, SIGNAL(triggered()), this, SLOT (switchUnitButtonClicked()));
+    connect(unlockForMintingAction, SIGNAL(triggered(bool)), this, SLOT(unlockForMinting(bool)));
 }
 
 void BitcoinGUI::createMenuBar()
@@ -926,4 +928,9 @@ void BitcoinGUI::gotoVotePage()
 void BitcoinGUI::gotoParkPage()
 {
     if (walletFrame) walletFrame->gotoParkPage();
+}
+
+void BitcoinGUI::unlockForMinting(bool status)
+{
+    if (walletFrame) walletFrame->unlockForMinting(status);
 }

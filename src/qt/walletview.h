@@ -108,6 +108,9 @@ public slots:
     /** Ask for passphrase to unlock wallet temporarily */
     void unlockWallet();
 
+    /** Decrypt wallet for minting only */
+    void unlockForMinting(bool status);
+
     void setEncryptionStatus();
 
     /** Switch to another unit */

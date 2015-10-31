@@ -112,6 +112,8 @@ public slots:
     void gotoParkPage();
     /** Switch to vote page */
     void gotoVotePage();
+
+    void unlockForMinting(bool status);
 };
 
 #endif // WALLETSTACK_H

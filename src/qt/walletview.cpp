@@ -355,6 +355,38 @@ void WalletView::unlockWallet()
     }
 }
 
+void WalletView::unlockForMinting(bool status)
+{
+    if(!walletModel)
+        return;
+
+    if (status)
+    {
+        if(walletModel->getEncryptionStatus() != WalletModel::Locked)
+            return;
+
+        AskPassphraseDialog dlg(AskPassphraseDialog::Unlock, this);
+        dlg.setModel(walletModel);
+        dlg.exec();
+
+        if(walletModel->getEncryptionStatus() != WalletModel::Unlocked)
+            return;
+
+        walletModel->setUnlockedForMintingOnly(true);
+    }
+    else
+    {
+        if(walletModel->getEncryptionStatus() != WalletModel::Unlocked)
+            return;
+
+        if (!walletModel->isUnlockedForMintingOnly())
+            return;
+
+        walletModel->setWalletLocked(true);
+        walletModel->setUnlockedForMintingOnly(false);
+    }
+}
+
 void WalletView::changeUnit(const QString &unit)
 {
     WalletModel *oldWalletModel = this->walletModel;
