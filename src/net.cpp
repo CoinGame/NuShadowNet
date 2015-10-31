@@ -1281,8 +1281,8 @@ void ThreadDNSAddressSeed()
 // Physical IP seeds: 32-bit IPv4 addresses: e.g. 178.33.22.32 = 0x201621b2
 unsigned int pnSeed[] =
 {
-    IP_ADDRESS(198,  52, 199,  75),
-    IP_ADDRESS(198,  52, 199,  46),
+    IP_ADDRESS(104, 156, 247, 229),
+    IP_ADDRESS(104, 238, 165,  61),
     IP_ADDRESS(192, 237, 200, 146),
     IP_ADDRESS(212, 129,  19, 120),
     IP_ADDRESS(128, 199,  96, 127),
