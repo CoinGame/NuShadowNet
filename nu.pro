@@ -53,6 +53,10 @@ contains(CURL_STATIC, 1) {
     DEFINES += CURL_STATICLIB
 }
 
+contains(MINIUPNP_STATICLIB, 1) {
+    DEFINES += MINIUPNP_STATICLIB
+}
+
 !win32 {
     # for extra security against potential buffer overflows: enable GCCs Stack Smashing Protection
     QMAKE_CXXFLAGS *= -fstack-protector-all
