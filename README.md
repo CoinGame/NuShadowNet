@@ -1,20 +1,13 @@
 
-Nu Official Development Repo
+Nu Shadow Net Testing Playground
 ==================================
 
-### What is Nu?
-//todo: Description to be written
+This code is maintained for testing the Nu Network. Why not use the official testnet? There are many parameters changed which make it difficult to say for sure testing results will be reflected in the main net code. The goal of this repo is to provide me (CoinGame) and place to run long term testing while also inviting community members to join the network. Some key differences to note about this code:
 
-### Nu Resources
-* Client and Source: Client Binaries, Source Code
-* Documentation: Nu Whitepaper, Nu Wiki
-* Help: Forum, Report an Issue
+* Differences between the master branch here and the [official Nu repo](https://bitbucket.org/JordanLeePeershares/Nubit)  are only for the purpose of preventing NuShadowNet from interfering with existing clients. This means you will be able to compile and run Nu mainnet and Nu Shadownet at the same time. They will have separate ports, data directory, and other changes. This will effectively be a separate network.
+
+* Voting will be centralized using a datafeed in the root of this repo. I will hold all pre-mined NuShares effectively allowing me to pass anything I want. I welcome anyone who would like to use this network for testing submit a pull request adding your motion, custodial grant (NSR/NBT), fees. The point of this repo is for everyone to test in a mainnet enviroment without any of the real costs that would occur using the actual mainnet. Let's get dirty.
 
 # Repo Guidelines
 
 * Developers work in their own forks, then submit pull requests when they think their feature or bug fix is ready.
-* If it is a simple/trivial/non-controversial change, then one of the development team members simply pulls it.
-* If it is a more complicated or potentially controversial change, then the change may be discussed in the pull request, or the requester may be asked to start a discussion on [discuss.nubits.com] for a broader community discussion. 
-* The patch will be accepted if there is broad consensus that it is a good thing. Developers should expect to rework and resubmit patches if they don't match the project's coding conventions (see coding.txt) or are controversial.
-* From time to time a pull request will become outdated. If this occurs, and the pull is no longer automatically mergeable; a comment on the pull will be used to issue a warning of closure.  Pull requests closed in this manner will have their corresponding issue labeled 'stagnant'.
-* For development ideas and help see [here].
