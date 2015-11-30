@@ -5,16 +5,7 @@ QMainWindow {
 QToolBar {
   background-color: #211f20;
   height: 125px;
-  border-bottom: 4px solid #ffb800; }
-
-QToolBar > .toolbarSpacer {
-  min-width: 125px;
-  background: url(:/images/res/images/nubitslogotext) no-repeat;
-  border: 1px solid transparent;
-  border-bottom: 3px solid #ffb800;
-  margin-top: 5px;
-  margin-left: 15px;
-  margin-right: 40px; }
+  border-bottom: 3px solid #B58300; }
 
 QToolBar > QToolButton {
   border: 0px;
@@ -25,20 +16,19 @@ QToolBar > QToolButton {
   margin-left: 3px;
   margin-right: 3px;
   height: 15px;
-  font-size: 12px;
-  font-weight: 500;
+  font-weight: 600;
   padding-top: 5px;
   padding-bottom: 5px;
   padding-left: 5px;
   padding-right: 5px; }
 
 QToolBar > QToolButton:checked {
-  border-bottom: 2px solid #ffb800;
+  border-bottom: 2px solid #B58300;
   color: white;
   margin-top: 17px;
   margin-bottom: 15px;
   height: 15px;
-  font-weight: 500;
+  font-weight: 600;
   padding-top: 5px;
   padding-bottom: 5px;
   padding-left: 5px;
@@ -50,9 +40,10 @@ QToolBar > QToolButton:checked:hover {
 QToolBar > QToolButton:hover {
   background-color: #322f30; }
 
-QToolBar > QToolButton:last {
-  background-color: red;
-}
+QMenuBar::item {
+  spacing: 3px;
+  padding: 1px 3px;
+  border-radius: 4px; }
 
 QGroupBox {
   background: transparent;
@@ -103,9 +94,6 @@ QStatusBar {
   color: white;
   background-color: #211f20; }
 
-QStatusBar .progressBarLabel {
-  color: #ffffff; }
-
 QTimeEdit {
   background-color: #f8f8f8; }
 
@@ -124,11 +112,3 @@ QToolTip {
   background-color: #f8f8f8;
   color: block;
   border: 0px; }
-
-QProgressBar {
-  max-height: 25px;
-}
-
-.switchUnitToggleBtn {
-  color: #ef3614;
-}

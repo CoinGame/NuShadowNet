@@ -5,7 +5,7 @@ QMainWindow {
 QToolBar {
   background-color: #211f20;
   height: 125px;
-  border-bottom: 3px solid #ef3614; }
+  border-bottom: 3px solid #AD250C; }
 
 QToolBar > QToolButton {
   border: 0px;
@@ -23,7 +23,7 @@ QToolBar > QToolButton {
   padding-right: 5px; }
 
 QToolBar > QToolButton:checked {
-  border-bottom: 2px solid #ef3614;
+  border-bottom: 2px solid #AD250C;
   color: white;
   margin-top: 17px;
   margin-bottom: 15px;

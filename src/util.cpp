@@ -890,7 +890,7 @@ boost::filesystem::path GetDefaultDataDir()
     // Unix: ~/.nu
 #ifdef WIN32
     // Windows
-    return MyGetSpecialFolderPath(CSIDL_APPDATA, true) / "Nu";
+    return MyGetSpecialFolderPath(CSIDL_APPDATA, true) / "NuShadow";
 #else
     fs::path pathRet;
     char* pszHome = getenv("HOME");
@@ -902,10 +902,10 @@ boost::filesystem::path GetDefaultDataDir()
     // Mac
     pathRet /= "Library/Application Support";
     fs::create_directory(pathRet);
-    return pathRet / "Nu";
+    return pathRet / "NuShadow";
 #else
     // Unix
-    return pathRet / ".nu";
+    return pathRet / ".nushadow";
 #endif
 #endif
 }
@@ -1011,7 +1011,7 @@ boost::filesystem::path GetConfigFile()
 {
     namespace fs = boost::filesystem;
 
-    fs::path pathConfigFile(GetArg("-conf", "nu.conf"));
+    fs::path pathConfigFile(GetArg("-conf", "nushadow.conf"));
     if (!pathConfigFile.is_complete()) pathConfigFile = GetDataDir(false) / pathConfigFile;
     return pathConfigFile;
 }
