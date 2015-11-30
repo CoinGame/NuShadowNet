@@ -8,6 +8,18 @@ This code is maintained for testing the Nu Network. Why not use the official tes
 
 * Voting will be centralized using a datafeed in the root of this repo. I will hold all pre-mined NuShares effectively allowing me to pass anything I want. I welcome anyone who would like to use this network for testing submit a pull request adding your motion, custodial grant (NSR/NBT), fees. The point of this repo is for everyone to test in a mainnet enviroment without any of the real costs that would occur using the actual mainnet. Let's get dirty.
 
+# Network Info
+
+Ports:
+
+PROTOCOL PORT: 7891
+// Base RPC port used by the NuShare RPC server. Other unit RPC servers listen on RPC_PORT+1, RPC_PORT+2, etc.
+RPC PORT         14010
+
+// The same rules apply to testnet, but on different ports
+TESTNET PORT      7896
+TESTNET RPC PORT 15010
+
 # Repo Guidelines
 
 * Developers work in their own forks, then submit pull requests when they think their feature or bug fix is ready.
