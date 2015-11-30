@@ -6,8 +6,6 @@ src/nud
 ppcoin-qt
 nu-qt
 nu
-nud
-nu.conf
 src/ppcoind
 src/test_ppcoin
 src/test_nu
