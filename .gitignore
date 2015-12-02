@@ -3,10 +3,13 @@ src/peershares
 src/peersharesd
 src/test_peershares
 src/nud
+src/nudshadow
 ppcoin-qt
 nu-qt
 nu
+nushadow
 nud
+nudshadow
 nu.conf
 src/ppcoind
 src/test_ppcoin
