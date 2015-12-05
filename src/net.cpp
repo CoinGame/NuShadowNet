@@ -1372,13 +1372,13 @@ void ThreadOpenConnections()
             size_t nSeedCount;
             if (fTestNet)
             {
-                pnSeed = pnSeedMainNet;
-                nSeedCount = ARRAYLEN(pnSeedMainNet);
+                pnSeed = pnSeedTestNet;
+                nSeedCount = ARRAYLEN(pnSeedTestNet);
             }
             else
             {
-                pnSeed = pnSeedTestNet;
-                nSeedCount = ARRAYLEN(pnSeedTestNet);
+                pnSeed = pnSeedMainNet;
+                nSeedCount = ARRAYLEN(pnSeedMainNet);
             }
             std::vector<CAddress> vAdd;
             for (unsigned int i = 0; i < nSeedCount; i++)
