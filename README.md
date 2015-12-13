@@ -10,15 +10,28 @@ This code is maintained for testing the Nu Network. Why not use the official tes
 
 # Network Info
 
+Seet Node:
+
+There are no hard coded seed IP's in the source. You must [create a nu.conf file](https://docs.nubits.com/creating-conf-file/) with an addnode to connect to the network. The seed IP is 178.62.58.236 for the shadow network is 178.62.58.236.
+
+Sample nu.conf
+```
+rpcuser=randomusername
+rpcpassword=randompassword
+addnode=178.62.58.236
+```
+
 Ports:
 
-PROTOCOL PORT: 7891  
-// Base RPC port used by the NuShare RPC server. Other unit RPC servers listen on RPC_PORT+1, RPC_PORT+2, etc.  
-RPC PORT         14010  
-  
-// The same rules apply to testnet, but on different ports  
-TESTNET PORT      7896  
-TESTNET RPC PORT 15010  
+Port Type | Port Number  
+-------- | --------  
+Protocol port | 7891  
+NuShares RPC port | 14010 
+NuBits RPC port | 14011  
+-------- | --------  
+Testnet protocol port | 7896  
+NuShares testnet RPC port | 15010  
+NuBits testnet RPC port | 15011  
   
 # Voting info
 
