@@ -45,3 +45,4 @@ dist
 src/qt/res/styles/.sass-cache/
 src/qt/res/styles/fire_app_log.txt
 /src/test/containers/tmp/
+.idea
