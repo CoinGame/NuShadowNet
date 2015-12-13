@@ -12,7 +12,7 @@ This code is maintained for testing the Nu Network. Why not use the official tes
 
 ### Seed Node:
 
-There are no hard coded seed IP's in the source. You must [create a nu.conf file](https://docs.nubits.com/creating-conf-file/) with an addnode to connect to the network. The seed IP for the shadow network is 178.62.58.236.
+There are no hard coded seed IP addresses in the source. You must [create a nu.conf file](https://docs.nubits.com/creating-conf-file/) with an addnode to connect to the network. The seed IP for the shadow network is 178.62.58.236.
 
 Sample nu.conf
 ```
