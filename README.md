@@ -12,7 +12,7 @@ This code is maintained for testing the Nu Network. Why not use the official tes
 
 Seet Node:
 
-There are no hard coded seed IP's in the source. You must [create a nu.conf file](https://docs.nubits.com/creating-conf-file/) with an addnode to connect to the network. The seed IP is 178.62.58.236 for the shadow network is 178.62.58.236.
+There are no hard coded seed IP's in the source. You must [create a nu.conf file](https://docs.nubits.com/creating-conf-file/) with an addnode to connect to the network. The seed IP for the shadow network is 178.62.58.236.
 
 Sample nu.conf
 ```
@@ -28,7 +28,6 @@ Port Type | Port Number
 Protocol port | 7891  
 NuShares RPC port | 14010 
 NuBits RPC port | 14011  
--------- | --------  
 Testnet protocol port | 7896  
 NuShares testnet RPC port | 15010  
 NuBits testnet RPC port | 15011  
