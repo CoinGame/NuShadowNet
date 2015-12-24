@@ -2,6 +2,8 @@
 Nu Shadow Net Testing Playground
 ==================================
 
+[![Join the chat at https://gitter.im/CoinGame/NuShadowNet](https://badges.gitter.im/CoinGame/NuShadowNet.svg)](https://gitter.im/CoinGame/NuShadowNet?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
+
 This code is maintained for testing the Nu Network. Why not use the official testnet? There are many parameters changed which make it difficult to say for sure testing results will be reflected in the main net code. The goal of this repo is to provide the community a place to run through testing scenarios without having to expend any real value. Some key differences to note about this repo:
 
 * Differences between the master branch here and the [official Nu repo](https://bitbucket.org/JordanLeePeershares/Nubit)  are only for the purpose of preventing NuShadowNet from interfering with existing clients. This means you will be able to compile and run Nu mainnet and Nu Shadownet at the same time. They will have separate ports, data directory, visual, and other cosmetic changes. This will effectively be a separate network, but protocol and functionality will follow the true mainnet.
