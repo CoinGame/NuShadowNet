@@ -184,7 +184,9 @@ void BlockMap::cleanup()
         else
             ++it;
     }
-    printf("BlockMap cleanup: %"PRIszd" removed\n", nLoadedBefore - mapLoaded.size());
+    int nRemoved = nLoadedBefore - mapLoaded.size();
+    if (nRemoved > 1000)
+        printf("BlockMap cleanup: %"PRIszd" removed\n", nLoadedBefore - mapLoaded.size());
 }
 
 void BlockMap::assert_loaded(const CBlockIndex* pindex) const
