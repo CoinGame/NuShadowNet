@@ -105,7 +105,7 @@ void VotePage::fillCustodianTable()
     QTableWidget* table = ui->custodianTable;
     table->setRowCount(0);
     int row = 0;
-    for (CBlockIndex* pindex = lastBestBlock; pindex; pindex = pindex->pprev)
+    for (CBlockIndex* pindex = lastBestBlock; pindex; pindex = pindex->pprevElected)
     {
         BOOST_FOREACH(const CCustodianVote& custodianVote, pindex->vElectedCustodian)
         {
