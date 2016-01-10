@@ -3026,9 +3026,9 @@ bool ProcessBlock(CValidationState &state, CNode* pfrom, CBlock* pblock, CDiskBl
     {
         printf("WARNING: ProcessBlock(): check proof-of-stake failed for block %s\n", hash.ToString().c_str());
 
-        // peershares: ask for missing blocks
+        // nu: ask for missing blocks
         if (pfrom)
-            pfrom->fStartSync = true;
+            pfrom->PushGetBlocks(pindexBest, pblock->GetHash());
 
         return false; // do not error here as we expect this during initial block download
     }
@@ -3106,10 +3106,15 @@ bool ProcessBlock(CValidationState &state, CNode* pfrom, CBlock* pblock, CDiskBl
             mapOrphanBlocks.insert(make_pair(hash, pblock2));
             mapOrphanBlocksByPrev.insert(make_pair(pblock2->hashPrevBlock, pblock2));
 
-            // ppcoin: getblocks may not obtain the ancestor block rejected
-            // earlier by duplicate-stake check so we ask for it again directly
-            if (!IsInitialBlockDownload())
-                pfrom->AskFor(CInv(MSG_BLOCK, WantedByOrphan(pblock2)));
+            // Ask this guy to fill in what we're missing
+            if (pfrom)
+            {
+                pfrom->PushGetBlocks(pindexBest, GetOrphanRoot(pblock2));
+                // ppcoin: getblocks may not obtain the ancestor block rejected
+                // earlier by duplicate-stake check so we ask for it again directly
+                if (!IsInitialBlockDownload())
+                    pfrom->AskFor(CInv(MSG_BLOCK, WantedByOrphan(pblock2)));
+            }
         }
         return true;
     }
