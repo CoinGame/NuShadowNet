@@ -1364,6 +1364,7 @@ void ThreadOpenConnections()
         CSemaphoreGrant grant(*semOutbound);
         boost::this_thread::interruption_point();
 
+#ifndef TESTING
         // Add seed nodes if IRC isn't working
         // nubit: do not wait 60s because IRC is disabled
         if (addrman.size()==0 && (GetTime() - nStart > 0))
@@ -1396,6 +1397,7 @@ void ThreadOpenConnections()
             }
             addrman.Add(vAdd, CNetAddr("127.0.0.1"));
         }
+#endif
 
         //
         // Choose an address to connect to based on most recently seen
