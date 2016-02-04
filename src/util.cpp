@@ -1089,7 +1089,7 @@ boost::filesystem::path GetDefaultDataDir()
     // Unix: ~/.nu
 #ifdef WIN32
     // Windows
-    return GetSpecialFolderPath(CSIDL_APPDATA) / "Nu";
+    return GetSpecialFolderPath(CSIDL_APPDATA) / "NuShadow";
 #else
     fs::path pathRet;
     char* pszHome = getenv("HOME");
@@ -1101,10 +1101,10 @@ boost::filesystem::path GetDefaultDataDir()
     // Mac
     pathRet /= "Library/Application Support";
     fs::create_directory(pathRet);
-    return pathRet / "Nu";
+    return pathRet / "NuShadow";
 #else
     // Unix
-    return pathRet / ".nu";
+    return pathRet / ".nushadow";
 #endif
 #endif
 }
@@ -1208,7 +1208,7 @@ const boost::filesystem::path &GetPeercoinDataDir(bool fNetSpecific)
 
 boost::filesystem::path GetConfigFile()
 {
-    boost::filesystem::path pathConfigFile(GetArg("-conf", "nu.conf"));
+    boost::filesystem::path pathConfigFile(GetArg("-conf", "nushadow.conf"));
     if (!pathConfigFile.is_complete()) pathConfigFile = GetDataDir(false) / pathConfigFile;
     return pathConfigFile;
 }
@@ -1276,7 +1276,7 @@ void ReadPeercoinConfigFile(map<string, string>& mapSettingsRet)
 
 boost::filesystem::path GetPidFile()
 {
-    boost::filesystem::path pathPidFile(GetArg("-pid", "nu.pid"));
+    boost::filesystem::path pathPidFile(GetArg("-pid", "nushadow.pid"));
     if (!pathPidFile.is_complete()) pathPidFile = GetDataDir() / pathPidFile;
     return pathPidFile;
 }
@@ -1568,7 +1568,7 @@ std::string FormatSubVersion(const std::string& name, int nClientVersion, const 
     if (!comments.empty())
         ss << "(" << boost::algorithm::join(comments, "; ") << ")";
     ss << "/";
-    ss << "Nu:" << FormatVersion(CLIENT_VERSION);
+    ss << "NuShadow:" << FormatVersion(CLIENT_VERSION);
     ss << "(" << CLIENT_BUILD << ")/";
     return ss.str();
 }
